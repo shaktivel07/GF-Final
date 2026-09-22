@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+{% block title %}SRM Good Foods — Campus Delivery{% endblock %}
+
+{% block body %}
+<!-- ====================== HEADER ====================== -->
+<header class="site-header" id="site-header">
+  <div class="header-inner">
+    <!-- Brand -->
+    <a class="brand-link" href="/" id="brand-link">
+      <div class="logo logo-sm">
+        <img src="https://srmgoodfoods.com/wp-content/uploads/2024/06/srm-goodfoods-logo-1-1024x641.png" alt="SRM Good Foods" onerror="this.onerror=null; this.parentElement.innerHTML='<span style=\'font-weight:800;font-size:1.125rem;color:#942626;font-family:Playfair Display,serif\'>SRM Good Foods</span>'">
+      </div>
+      <div class="hide-mobile">
+        <span class="brand-name">SRM Good Foods</span>
+        <span class="brand-tagline">Campus Food Delivery</span>
+      </div>
+    </a>
+
+    <!-- Center Nav (Desktop) -->
+    <nav class="center-nav" id="center-nav">
+      <button class="nav-pill active" data-view="store" onclick="switchView('store')">
+        <i data-lucide="utensils-crossed" class="icon-sm"></i> Menu
+      </button>
+      <button class="nav-pill" data-view="tracking" onclick="switchView('tracking')">
+        <i data-lucide="package-check" class="icon-sm"></i> Track Order
+      </button>
+    </nav>
+
+    <!-- Right Actions -->
+    <div class="flex items-center gap-2">
+      <!-- Cart Button -->
+      <button class="cart-btn" id="cart-btn" onclick="openCartDrawer()" style="display:none;">
+        <i data-lucide="shopping-bag" class="icon-md"></i>
+        <span class="cart-badge" id="cart-count">0</span>
+      </button>
+
+      <!-- Auth Section -->
+      <div id="auth-section">
+        <button class="btn-signin" id="signin-btn" onclick="openAuthModal()">
+          <i data-lucide="user-circle" class="icon-md"></i>
+          <span class="hide-mobile">Sign In</span>
+        </button>
+      </div>
+
+      <!-- Mobile Toggle -->
+      <button class="mobile-toggle" id="mobile-toggle" onclick="toggleMobileMenu()">
+        <i data-lucide="menu" class="icon-md"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile Menu -->
+  <div class="mobile-menu" id="mobile-menu">
+    <button class="mobile-menu-btn active" data-view="store" onclick="switchView('store'); closeMobileMenu();">
+      <i data-lucide="utensils-crossed" class="icon-sm"></i> Browse Menu
+    </button>
+    <button class="mobile-menu-btn" data-view="tracking" onclick="switchView('tracking'); closeMobileMenu();">
+      <i data-lucide="package-check" class="icon-sm"></i> Track My Order
+    </button>
+  </div>
+</header>
+
+<!-- ====================== MAIN CONTENT ====================== -->
+<main>
+  <!-- ---- STORE VIEW ---- -->
+  <div id="view-store" class="view-panel active" style="padding-bottom:6rem;">
+    <div style="max-width:80rem; margin:0 auto; padding:1.5rem 1rem;">
+      <!-- Hero Banner -->
+      <div class="hero-banner" id="hero-banner">
+        <div class="hero-sparkle-badge">
+          <i data-lucide="sparkles" class="icon-sm"></i>
+          <span>Campus Fresh</span>
+        </div>
+        <h1 class="hero-title">Delicious Food, Straight to Your SRM Campus Location</h1>
+        <p style="font-size:0.75rem;color:rgba(255,255,255,0.85);margin-top:0.5rem;max-width:32rem;line-height:1.625;">
+          Browse our restaurant menu, pay securely with Razorpay, and get your food delivered right to your hostel, tech park, or classroom building.
+        </p>
+        <div class="flex flex-wrap gap-2" style="margin-top:1rem;">
+          <div class="hero-info-pill">
+            <i data-lucide="shield-check" class="icon-sm"></i>
+            <span>Razorpay Secure</span>
+          </div>
+          <div class="hero-info-pill">
+            <i data-lucide="map-pin" class="icon-sm"></i>
+            <span id="hero-location-count">17+ Spots</span>
+          </div>
+          <div class="hero-info-pill" id="hero-status-pill">
+            <i data-lucide="clock" class="icon-sm"></i>
+            <span id="hero-status-text">Loading...</span>
+          </div>
+        </div>
+        <!-- Closed Message Overlay -->
+        <div id="closed-overlay" class="hidden" style="position:absolute;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-3xl);z-index:5;">
+          <div style="text-align:center;padding:2rem;">
+            <i data-lucide="moon" class="icon-xl" style="color:var(--color-gold);margin:0 auto 0.75rem;display:block;width:2.5rem;height:2.5rem;"></i>
+            <h3 style="font-weight:700;font-size:1.125rem;color:#fff;">Kitchen is Closed</h3>
+            <p style="font-size:0.75rem;color:var(--stone-400);margin-top:0.25rem;" id="closed-message-text">We'll be back soon!</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search & Category Filters -->
+      <div class="flex flex-wrap items-center justify-between gap-3" style="margin-bottom:1rem;">
+        <div style="position:relative; flex:1; max-width:20rem;">
+          <i data-lucide="search" class="icon" style="position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);color:var(--stone-400);"></i>
+          <input type="text" id="search-input" placeholder="Search dishes..." class="form-input" style="padding-left:2.5rem;" oninput="filterMenu()">
+        </div>
+        <div class="flex flex-wrap gap-1" id="category-filter-pills">
+          <button class="nav-pill active" data-cat="all" onclick="filterByCategory('all', this)">All Items</button>
+        </div>
+      </div>
+
+      <!-- Food Grid -->
+      <div id="food-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-5" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
+        <!-- Populated by JS -->
+        <div class="text-center" style="grid-column: 1 / -1; padding:3rem;">
+          <div class="spinner" style="margin:0 auto 0.5rem;"></div>
+          <p style="font-size:0.75rem;color:var(--stone-500);">Loading menu from PostgreSQL...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---- TRACKING VIEW ---- -->
+  <div id="view-tracking" class="view-panel" style="display:none;">
+    <div style="max-width:56rem; margin:0 auto; padding:1.5rem 1rem;">
+      <!-- Populated by tracking.js -->
+      <div id="tracking-content">
+        <div class="text-center" style="padding:4rem 0;">
+          <i data-lucide="receipt" class="icon-xl" style="color:var(--color-primary);margin:0 auto 0.75rem;display:block;width:3rem;height:3rem;"></i>
+          <h3 style="font-weight:700;font-size:1.125rem;color:var(--stone-900);font-family:var(--font-serif);">Sign In to Track Orders</h3>
+          <p style="font-size:0.75rem;color:var(--stone-500);margin:0.25rem auto 1.25rem;max-width:20rem;">
+            Log in with your Firebase account to monitor kitchen preparation, track your delivery rider, and view your OTP.
+          </p>
+          <button class="btn btn-primary" onclick="openAuthModal()">Sign In with Firebase</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ====================== FLOATING CART ====================== -->
+<div class="floating-cart" id="floating-cart" style="display:none;">
+  <button class="floating-cart-btn" onclick="openCartDrawer()">
+    <i data-lucide="shopping-bag" class="icon-md"></i>
+    <span id="floating-cart-text" style="font-weight:800;font-size:0.75rem;">View Cart</span>
+    <div class="divider"></div>
+    <span id="floating-cart-total" style="font-weight:800;font-size:0.875rem;">₹0</span>
+  </button>
+</div>
+
+<!-- ====================== CART DRAWER ====================== -->
+<div class="cart-overlay" id="cart-overlay" style="display:none;" onclick="closeCartDrawer(event)">
+  <div class="cart-panel" onclick="event.stopPropagation()">
+    <!-- Cart Header -->
+    <div class="cart-header">
+      <div>
+        <h2 style="font-weight:800;font-size:1rem;font-family:var(--font-serif);">Your Order</h2>
+        <p style="font-size:10px;color:rgba(255,255,255,0.8);">SRM Good Foods Express</p>
+      </div>
+      <button onclick="closeCartDrawer()" style="color:rgba(255,255,255,0.8);padding:0.375rem;border-radius:var(--radius-full);">
+        <i data-lucide="x" class="icon-md"></i>
+      </button>
+    </div>
+
+    <!-- Cart Body (scrollable) -->
+    <div style="flex:1;overflow-y:auto;padding:1rem;" id="cart-body">
+      <div id="cart-items-list">
+        <!-- Items populated by JS -->
+      </div>
+
+      <!-- Kitchen Notes -->
+      <div style="margin-top:1rem;" id="cart-notes-section">
+        <label class="form-label">
+          <i data-lucide="message-square" class="icon-sm" style="display:inline;vertical-align:middle;margin-right:0.25rem;"></i>
+          Kitchen Instructions (Optional)
+        </label>
+        <textarea id="cart-notes" class="form-textarea" rows="2" placeholder="Extra spicy, no onions, etc..."></textarea>
+      </div>
+
+      <!-- Delivery Location -->
+      <div style="margin-top:1rem;" id="cart-location-section">
+        <label class="form-label">
+          <i data-lucide="map-pin" class="icon-sm" style="display:inline;vertical-align:middle;margin-right:0.25rem;color:var(--color-primary);"></i>
+          Delivery Location (Required)
+        </label>
+        <select id="cart-location" class="form-select">
+          <option value="">Select your campus drop point...</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Cart Footer -->
+    <div style="padding:1rem;border-top:1px solid var(--stone-200);background:#fff;">
+      <div class="flex justify-between mb-2" style="font-size:0.75rem;color:var(--stone-500);">
+        <span>Subtotal</span>
+        <span id="cart-subtotal" style="font-weight:700;color:var(--stone-900);">₹0</span>
+      </div>
+      <div class="flex justify-between mb-3" style="font-size:1rem;font-weight:900;color:var(--stone-900);">
+        <span>Total</span>
+        <span id="cart-total" style="color:var(--color-primary);">₹0</span>
+      </div>
+      <button class="btn btn-dark btn-block btn-lg" id="checkout-btn" onclick="handleCheckout()">
+        <i data-lucide="lock" class="icon-sm"></i>
+        <span>Pay with Razorpay</span>
+      </button>
+      <p style="font-size:10px;color:var(--stone-400);text-align:center;margin-top:0.5rem;">
+        <i data-lucide="shield-check" class="icon-xs" style="display:inline;vertical-align:middle;margin-right:0.125rem;"></i>
+        Secured by Razorpay • 256-bit encryption
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== AUTH MODAL ====================== -->
+<div class="modal-overlay" id="auth-modal" style="display:none;">
+  <div class="modal-panel" style="max-width:24rem;">
+    <button class="modal-close" onclick="closeAuthModal()">
+      <i data-lucide="x" class="icon-md"></i>
+    </button>
+    <div style="padding:0.5rem 0 1.5rem;">
+      <div class="logo" style="justify-content:center;display:flex;margin-bottom:1rem;">
+        <img src="https://srmgoodfoods.com/wp-content/uploads/2024/06/srm-goodfoods-logo-1-1024x641.png" alt="SRM Good Foods" style="height:3.5rem;">
+      </div>
+      <h3 style="font-weight:700;font-size:1.125rem;color:var(--stone-900);font-family:var(--font-serif);">Welcome to SRM Good Foods</h3>
+      <p style="font-size:0.75rem;color:var(--stone-500);margin-top:0.25rem;">
+        Sign in securely with your Google account via Firebase Authentication to place orders.
+      </p>
+
+      <div id="auth-error" class="alert alert-error" style="display:none;margin-top:1rem;">
+        <i data-lucide="alert-circle" class="icon shrink-0"></i>
+        <span id="auth-error-text"></span>
+      </div>
+
+      <button class="btn-google" id="google-signin-btn" onclick="signInWithGoogle()" style="margin-top:1.25rem;">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        <span>Continue with Google</span>
+      </button>
+
+      <p style="font-size:10px;color:var(--stone-400);margin-top:0.75rem;">
+        <i data-lucide="shield-check" class="icon-xs" style="display:inline;vertical-align:middle;margin-right:0.125rem;"></i>
+        Firebase Authentication • Verified by Google
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== PHONE MODAL ====================== -->
+<div class="modal-overlay" id="phone-modal" style="display:none;">
+  <div class="modal-panel" style="max-width:24rem;">
+    <div style="padding:0.5rem 0 1rem;">
+      <div style="width:3rem;height:3rem;border-radius:var(--radius-2xl);background:var(--amber-50);color:var(--amber-500);display:flex;align-items:center;justify-content:center;margin:0 auto 0.75rem;">
+        <i data-lucide="phone" class="icon-lg"></i>
+      </div>
+      <h3 style="font-weight:700;font-size:1.125rem;color:var(--stone-900);font-family:var(--font-serif);">Phone Number Required</h3>
+      <p style="font-size:0.75rem;color:var(--stone-500);margin-top:0.25rem;">
+        We need your phone number so your delivery rider can contact you when your food arrives.
+      </p>
+
+      <div id="phone-error" class="alert alert-error" style="display:none;margin-top:0.75rem;">
+        <i data-lucide="alert-circle" class="icon shrink-0"></i>
+        <span id="phone-error-text"></span>
+      </div>
+
+      <form onsubmit="submitPhone(event)" style="margin-top:1rem;">
+        <label class="form-label" style="text-align:left;">Mobile Number</label>
+        <div style="position:relative;">
+          <span style="position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);font-size:0.75rem;font-weight:700;color:var(--stone-800);">+91</span>
+          <input type="tel" id="phone-input" class="form-input" style="padding-left:2.75rem;font-weight:600;letter-spacing:0.05em;" placeholder="98765 43210" required maxlength="10" pattern="[0-9]{10}">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" style="margin-top:1rem;" id="phone-submit-btn">
+          Save & Continue
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== STAFF LOGIN MODAL ====================== -->
+<div class="modal-overlay" id="staff-modal" style="display:none;">
+  <div class="modal-panel" style="max-width:24rem;">
+    <button class="modal-close" onclick="closeStaffModal()">
+      <i data-lucide="x" class="icon-md"></i>
+    </button>
+    <div style="padding:0.5rem 0 1rem;">
+      <div style="width:3rem;height:3rem;border-radius:var(--radius-2xl);background:var(--stone-900);color:var(--color-gold);display:flex;align-items:center;justify-content:center;margin:0 auto 0.75rem;">
+        <i data-lucide="shield-check" class="icon-lg"></i>
+      </div>
+      <h3 style="font-weight:700;font-size:1.125rem;color:var(--stone-900);font-family:var(--font-serif);">Operations Portal Login</h3>
+      <p style="font-size:0.75rem;color:var(--stone-500);margin-top:0.25rem;">
+        Authorized SRM staff only. Contact admin for access credentials.
+      </p>
+
+      <!-- Portal type selector -->
+      <div class="flex gap-1" style="margin-top:1rem;background:var(--stone-100);padding:0.25rem;border-radius:var(--radius-xl);">
+        <button class="nav-pill active" id="portal-tab-admin" onclick="setPortalTab('admin')" style="flex:1;text-align:center;font-size:0.75rem;font-weight:700;">Admin</button>
+        <button class="nav-pill" id="portal-tab-kitchen" onclick="setPortalTab('kitchen')" style="flex:1;text-align:center;font-size:0.75rem;font-weight:700;">Kitchen</button>
+        <button class="nav-pill" id="portal-tab-delivery" onclick="setPortalTab('delivery')" style="flex:1;text-align:center;font-size:0.75rem;font-weight:700;">Delivery</button>
+      </div>
+
+      <div id="staff-error" class="alert alert-error" style="display:none;margin-top:0.75rem;">
+        <i data-lucide="alert-circle" class="icon shrink-0"></i>
+        <span id="staff-error-text"></span>
+      </div>
+
+      <form onsubmit="submitStaffLogin(event)" style="margin-top:1rem;text-align:left;">
+        <div style="margin-bottom:0.75rem;">
+          <label class="form-label">Email / Username</label>
+          <input type="text" id="staff-username" class="form-input" placeholder="admin / kitchen / delivery" required>
+        </div>
+        <div style="margin-bottom:1rem;">
+          <label class="form-label">Portal Password</label>
+          <input type="password" id="staff-password" class="form-input" placeholder="Enter portal password" required>
+        </div>
+        <button type="submit" class="btn btn-dark btn-block" id="staff-submit-btn">
+          <i data-lucide="log-in" class="icon-sm"></i>
+          <span>Access Portal</span>
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== FOOTER ====================== -->
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-section">
+      <div class="logo logo-sm" style="margin-bottom:0.75rem;">
+        <img src="https://srmgoodfoods.com/wp-content/uploads/2024/06/srm-goodfoods-logo-1-1024x641.png" alt="SRM Good Foods" style="filter:brightness(0) invert(1) drop-shadow(0 1px 1px rgba(0,0,0,0.3));">
+      </div>
+      <p style="font-size:11px;color:var(--stone-500);max-width:16rem;line-height:1.5;">
+        Operated by SRM Good Foods, serving the SRM Institute of Science and Technology (SRMIST) campus community. Real-time food ordering with Razorpay payments.
+      </p>
+    </div>
+    <div class="footer-section">
+      <h4>Quick Links</h4>
+      <ul>
+        <li><button onclick="switchView('store')">Browse Menu</button></li>
+        <li><button onclick="switchView('tracking')">Track Order</button></li>
+      </ul>
+    </div>
+    <div class="footer-section">
+      <h4>Information</h4>
+      <ul>
+        <li><button>Payment: Razorpay UPI, Cards, Wallets</button></li>
+        <li><button>Login: Firebase Google OAuth</button></li>
+        <li><button>Delivery: Campus-only Spots</button></li>
+      </ul>
+    </div>
+    <div class="footer-section">
+      <h4>Campus Coverage</h4>
+      <ul>
+        <li><button>Tech Park, UB, Java Green, MBA</button></li>
+        <li><button>Hostels: Nelson Mandela, Paari, Oori</button></li>
+        <li><button>Meenakshi, Kalpana Chawla, Senbagam</button></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 SRM Good Foods. All rights reserved.</span>
+    <button class="ops-portal-link" onclick="openStaffModal()">
+      <i data-lucide="settings" style="width:0.625rem;height:0.625rem;"></i>
+      <span>Operations Portal</span>
+    </button>
+  </div>
+</footer>
+
+<style>
+  .view-panel { display: none; }
+  .view-panel.active { display: block; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/cart.js') }}"></script>
+<script src="{{ url_for('static', filename='js/checkout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/tracking.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,394 @@
+{% extends "base.html" %}
+{% block title %}SRM Kitchen Command Console{% endblock %}
+
+{% block head_extra %}
+<style>
+  /* Kitchen Command Portal - Dark & Light Theme System */
+  body.theme-dark {
+    --kds-bg: #0c0a09;
+    --kds-sidebar: #141210;
+    --kds-card-bg: #1c1917;
+    --kds-border: #292524;
+    --kds-hover: #292524;
+    --kds-text-primary: #f5f5f4;
+    --kds-text-secondary: #a8a29e;
+    --kds-card-inner: #141210;
+    --kds-input-bg: #141210;
+    --kds-input-border: #3d3530;
+    --kds-gold: #f59e0b;
+    --kds-btn-active: #26211d;
+    --kds-badge-bg: #292524;
+    --kds-shadow: 0 4px 6px -1px rgba(0,0,0,0.4);
+    background-color: var(--kds-bg) !important;
+    color: var(--kds-text-primary) !important;
+  }
+
+  body.theme-light {
+    --kds-bg: #f8fafc;
+    --kds-sidebar: #ffffff;
+    --kds-card-bg: #ffffff;
+    --kds-border: #e2e8f0;
+    --kds-hover: #f1f5f9;
+    --kds-text-primary: #0f172a;
+    --kds-text-secondary: #64748b;
+    --kds-card-inner: #f1f5f9;
+    --kds-input-bg: #ffffff;
+    --kds-input-border: #cbd5e1;
+    --kds-gold: #b45309;
+    --kds-btn-active: #fef3c7;
+    --kds-badge-bg: #e2e8f0;
+    --kds-shadow: 0 4px 6px -1px rgba(0,0,0,0.06), 0 2px 4px -2px rgba(0,0,0,0.05);
+    background-color: var(--kds-bg) !important;
+    color: var(--kds-text-primary) !important;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  .kitchen-layout {
+    display: flex;
+    min-height: 100vh;
+  }
+  .kitchen-sidebar {
+    width: 18rem;
+    background: var(--kds-sidebar);
+    border-right: 1px solid var(--kds-border);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    padding: 1.25rem 1rem;
+    z-index: 40;
+    transition: all 0.2s ease;
+  }
+  .kitchen-main {
+    flex: 1;
+    min-width: 0;
+    padding: 1.5rem 1.75rem 5rem;
+  }
+  .sidebar-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-xl);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--kds-text-secondary);
+    background: transparent;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    text-align: left;
+    margin-bottom: 0.375rem;
+  }
+  .sidebar-nav-btn:hover {
+    background: var(--kds-hover);
+    color: var(--kds-text-primary);
+  }
+  .sidebar-nav-btn.active {
+    background: var(--kds-btn-active);
+    color: var(--kds-gold);
+    border-color: rgba(245, 158, 11, 0.3);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .kds-count-badge {
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 800;
+    font-family: var(--font-mono);
+    background: var(--kds-badge-bg);
+    color: var(--kds-text-secondary);
+  }
+  .sidebar-nav-btn.active .kds-count-badge {
+    background: #d97706;
+    color: #fff;
+  }
+  .kds-batch-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.875rem;
+    background: var(--kds-card-inner);
+    border: 1px solid var(--kds-border);
+    border-radius: var(--radius-xl);
+    font-size: 0.8125rem;
+    color: var(--kds-text-primary);
+  }
+  .kds-batch-chip-qty {
+    background: #d97706;
+    color: #fff;
+    font-weight: 900;
+    font-size: 0.875rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--radius-lg);
+    font-family: var(--font-mono);
+  }
+  .kds-card {
+    background: var(--kds-card-bg);
+    border: 1px solid var(--kds-border);
+    border-radius: var(--radius-2xl);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    box-shadow: var(--kds-shadow);
+  }
+  .kds-card:hover {
+    border-color: #78716c;
+    transform: translateY(-2px);
+  }
+  .kds-card.urgent {
+    border-color: #ef4444;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+  }
+  .kds-card.preparing {
+    border-color: #f59e0b;
+  }
+  .kds-card.dispatched {
+    border-color: #3b82f6;
+  }
+  .kds-timer {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--radius-lg);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .timer-fresh { background: rgba(16, 185, 129, 0.15); color: #059669; border: 1px solid rgba(16, 185, 129, 0.3); }
+  body.theme-dark .timer-fresh { color: #34d399; }
+  .timer-warn { background: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.3); }
+  body.theme-dark .timer-warn { color: #fbbf24; }
+  .timer-urgent { background: rgba(239, 68, 68, 0.15); color: #dc2626; border: 1px solid rgba(239, 68, 68, 0.4); animation: pulse 2s infinite; }
+  body.theme-dark .timer-urgent { color: #f87171; }
+
+  /* Theme Switcher Button */
+  .theme-switch-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--radius-xl);
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--kds-hover);
+    color: var(--kds-text-primary);
+    border: 1px solid var(--kds-border);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .theme-switch-btn:hover {
+    border-color: var(--kds-gold);
+    color: var(--kds-gold);
+  }
+
+  @media (max-width: 1024px) {
+    .kitchen-layout { flex-direction: column; }
+    .kitchen-sidebar { width: 100%; height: auto; position: static; }
+  }
+</style>
+<script>
+  // Apply theme immediately to avoid flash
+  (function() {
+    const saved = localStorage.getItem('kds_theme') || 'dark';
+    document.documentElement.className = 'theme-' + saved;
+    document.addEventListener('DOMContentLoaded', () => {
+      document.body.className = 'theme-' + saved;
+    });
+  })();
+</script>
+{% endblock %}
+
+{% block body %}
+<div class="kitchen-layout">
+  <!-- ====================== LEFT SIDEBAR ====================== -->
+  <aside class="kitchen-sidebar">
+    <div>
+      <!-- Brand & Header -->
+      <div class="flex items-center gap-3" style="padding-bottom:1.25rem;margin-bottom:1.25rem;border-bottom:1px solid var(--kds-border);">
+        <div class="portal-logo logo logo-sm" style="background:rgba(255,255,255,0.1);padding:0.375rem;border-radius:var(--radius-xl);">
+          <img src="https://srmgoodfoods.com/wp-content/uploads/2024/06/srm-goodfoods-logo-1-1024x641.png" alt="SRM Good Foods">
+        </div>
+        <div>
+          <h1 style="font-weight:900;font-size:1.125rem;font-family:var(--font-serif);color:var(--kds-text-primary);letter-spacing:0.025em;line-height:1.2;">Kitchen Command</h1>
+          <p style="font-size:11px;color:var(--kds-gold);font-weight:600;">SRM Live Prep Portal</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div style="margin-bottom:1.5rem;">
+        <span style="font-size:10px;font-weight:800;color:var(--kds-text-secondary);text-transform:uppercase;letter-spacing:0.08em;display:block;margin-bottom:0.625rem;padding-left:0.5rem;">Operations Queue</span>
+        
+        <button class="sidebar-nav-btn active" data-tab="ACTIVE" onclick="setKitchenTab('ACTIVE', this)">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="flame" style="width:1.125rem;height:1.125rem;color:var(--kds-gold);"></i>
+            <span>Incoming & Prep</span>
+          </div>
+          <span class="kds-count-badge" id="count-active">0</span>
+        </button>
+
+        <button class="sidebar-nav-btn" data-tab="PREPARING" onclick="setKitchenTab('PREPARING', this)">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="chef-hat" style="width:1.125rem;height:1.125rem;color:#f97316;"></i>
+            <span>In Cooking / Prep</span>
+          </div>
+          <span class="kds-count-badge" id="count-preparing">0</span>
+        </button>
+
+        <button class="sidebar-nav-btn" data-tab="DISPATCHED" onclick="setKitchenTab('DISPATCHED', this)">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="bike" style="width:1.125rem;height:1.125rem;color:#38bdf8;"></i>
+            <span>Dispatched (Riders)</span>
+          </div>
+          <span class="kds-count-badge" id="count-dispatched">0</span>
+        </button>
+
+        <button class="sidebar-nav-btn" data-tab="UNPICKED" onclick="setKitchenTab('UNPICKED', this)">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="alert-triangle" style="width:1.125rem;height:1.125rem;color:#f87171;"></i>
+            <span>Unpicked / Alerts</span>
+          </div>
+          <span class="kds-count-badge" id="count-unpicked" style="background:#7f1d1d;color:#fecaca;">0</span>
+        </button>
+
+        <button class="sidebar-nav-btn" data-tab="DONE" onclick="setKitchenTab('DONE', this)">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="check-circle-2" style="width:1.125rem;height:1.125rem;color:#34d399;"></i>
+            <span>Completed & Closed</span>
+          </div>
+          <span class="kds-count-badge" id="count-done">0</span>
+        </button>
+
+        <button class="sidebar-nav-btn" data-tab="ALL" onclick="setKitchenTab('ALL', this)">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="layers" style="width:1.125rem;height:1.125rem;color:var(--kds-text-secondary);"></i>
+            <span>All Orders</span>
+          </div>
+          <span class="kds-count-badge" id="count-all">0</span>
+        </button>
+      </div>
+
+      <!-- Date & Duration Filters -->
+      <div style="background:var(--kds-card-inner);border:1px solid var(--kds-border);border-radius:var(--radius-2xl);padding:0.875rem;margin-bottom:1rem;">
+        <span style="font-size:10px;font-weight:800;color:var(--kds-text-secondary);text-transform:uppercase;letter-spacing:0.08em;display:block;margin-bottom:0.625rem;">
+          <i data-lucide="calendar" style="width:0.75rem;height:0.75rem;display:inline;margin-right:0.25rem;"></i> Date Filter
+        </span>
+        <div class="grid grid-cols-2 gap-1.5" style="margin-bottom:0.625rem;">
+          <button class="btn btn-sm" style="font-size:11px;padding:0.375rem;background:var(--kds-hover);color:var(--kds-text-primary);border:1px solid var(--kds-border);" onclick="applyDatePreset('TODAY')">Today</button>
+          <button class="btn btn-sm" style="font-size:11px;padding:0.375rem;background:var(--kds-hover);color:var(--kds-text-primary);border:1px solid var(--kds-border);" onclick="applyDatePreset('YESTERDAY')">Yesterday</button>
+          <button class="btn btn-sm" style="font-size:11px;padding:0.375rem;background:var(--kds-hover);color:var(--kds-text-primary);border:1px solid var(--kds-border);" onclick="applyDatePreset('MONTH')">This Month</button>
+          <button class="btn btn-sm" style="font-size:11px;padding:0.375rem;background:var(--kds-hover);color:var(--kds-text-primary);border:1px solid var(--kds-border);" onclick="applyDatePreset('ALL')">All Time</button>
+        </div>
+        <div class="space-y-1.5">
+          <input type="date" id="filter-start-date" class="form-input" style="background:var(--kds-input-bg);color:var(--kds-text-primary);border-color:var(--kds-input-border);font-size:11px;padding:0.375rem 0.5rem;" title="Start Date">
+          <input type="date" id="filter-end-date" class="form-input" style="background:var(--kds-input-bg);color:var(--kds-text-primary);border-color:var(--kds-input-border);font-size:11px;padding:0.375rem 0.5rem;" title="End Date">
+          <button class="btn btn-sm btn-block" style="background:var(--kds-gold);color:#fff;font-weight:700;font-size:11px;padding:0.375rem;" onclick="applyCustomDateRange()">Apply Range</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar Bottom Controls -->
+    <div>
+      <div class="flex items-center justify-between" style="padding-top:1rem;border-top:1px solid var(--kds-border);margin-bottom:0.75rem;">
+        <!-- Audio Alert Toggle -->
+        <button id="audio-toggle-btn" class="flex items-center gap-1.5 text-xs font-bold" style="color:var(--kds-gold);background:transparent;border:none;cursor:pointer;" onclick="toggleAudioAlert()">
+          <i data-lucide="volume-2" id="audio-icon" style="width:1rem;height:1rem;"></i>
+          <span id="audio-text">Alert: ON</span>
+        </button>
+
+        <!-- Theme Switcher (White / Black) -->
+        <button class="theme-switch-btn" id="theme-toggle-btn" onclick="toggleKitchenTheme()" title="Switch Light / Dark Theme">
+          <i data-lucide="sun" id="theme-icon" style="width:0.875rem;height:0.875rem;"></i>
+          <span id="theme-label">Light</span>
+        </button>
+
+        <!-- Fullscreen -->
+        <button class="text-xs font-bold" style="color:var(--kds-text-secondary);background:transparent;border:none;cursor:pointer;padding:0.25rem;" onclick="toggleFullScreen()" title="Fullscreen mode">
+          <i data-lucide="maximize-2" style="width:1rem;height:1rem;"></i>
+        </button>
+      </div>
+
+      <a href="/logout" class="btn btn-block flex items-center justify-center gap-2" style="background:var(--kds-hover);color:#f87171;border:1px solid var(--kds-border);font-size:0.75rem;padding:0.5rem;">
+        <i data-lucide="log-out" style="width:0.875rem;height:0.875rem;"></i>
+        <span>Exit Kitchen Portal</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- ====================== MAIN KITCHEN CONTENT ====================== -->
+  <main class="kitchen-main">
+    <!-- Top Control Bar -->
+    <div class="flex flex-wrap items-center justify-between gap-4" style="margin-bottom:1.5rem;background:var(--kds-card-bg);padding:1rem 1.25rem;border-radius:var(--radius-2xl);border:1px solid var(--kds-border);box-shadow:var(--kds-shadow);">
+      <div>
+        <h2 style="font-size:1.25rem;font-weight:900;font-family:var(--font-serif);color:var(--kds-text-primary);" id="view-title">Incoming & Prep Stream</h2>
+        <p style="font-size:11px;color:var(--kds-text-secondary);margin-top:2px;">Real-time sync with SRM payment gateway & courier dispatch</p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3">
+        <!-- Live Search -->
+        <div style="position:relative;width:14rem;">
+          <i data-lucide="search" style="position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);width:0.875rem;height:0.875rem;color:var(--kds-text-secondary);"></i>
+          <input type="text" id="kds-search" placeholder="Search order / dish..." class="form-input" style="background:var(--kds-input-bg);color:var(--kds-text-primary);border-color:var(--kds-input-border);padding-left:2.25rem;font-size:12px;height:2.25rem;" oninput="renderKitchenOrders()">
+        </div>
+
+        <!-- Location Filter -->
+        <select id="kds-location-filter" class="form-select" style="background:var(--kds-input-bg);color:var(--kds-text-primary);border-color:var(--kds-input-border);font-size:12px;height:2.25rem;width:11rem;" onchange="renderKitchenOrders()">
+          <option value="">All Drop Spots</option>
+        </select>
+
+        <!-- Sort Order -->
+        <select id="kds-sort-filter" class="form-select" style="background:var(--kds-input-bg);color:var(--kds-text-primary);border-color:var(--kds-input-border);font-size:12px;height:2.25rem;width:9.5rem;" onchange="renderKitchenOrders()">
+          <option value="OLDEST">Oldest First (Urgent)</option>
+          <option value="NEWEST">Newest First</option>
+          <option value="ITEMS_HIGH">Most Dishes</option>
+        </select>
+
+        <!-- Quick White/Black Theme Switch in Header -->
+        <button class="theme-switch-btn" onclick="toggleKitchenTheme()" title="Toggle White / Black Theme">
+          <i data-lucide="sun-moon" style="width:0.875rem;height:0.875rem;color:var(--kds-gold);"></i>
+          <span id="theme-header-label">Theme</span>
+        </button>
+
+        <!-- Refresh Button -->
+        <button onclick="loadKitchenOrders()" class="btn" style="background:var(--kds-hover);color:var(--kds-gold);border:1px solid var(--kds-border);padding:0.5rem 0.75rem;height:2.25rem;" title="Refresh live feed">
+          <i data-lucide="refresh-cw" id="kds-refresh-icon" style="width:1rem;height:1rem;"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Live KDS Batch Cooking Aggregator (Chef Summary Bar) -->
+    <div id="kds-batch-summary" style="background:var(--kds-card-bg);border:1px solid var(--kds-border);border-radius:var(--radius-2xl);padding:1rem 1.25rem;margin-bottom:1.5rem;box-shadow:var(--kds-shadow);display:none;">
+      <div class="flex items-center justify-between" style="margin-bottom:0.75rem;">
+        <div class="flex items-center gap-2">
+          <i data-lucide="layers" style="width:1.125rem;height:1.125rem;color:var(--kds-gold);"></i>
+          <span style="font-size:0.8125rem;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;color:var(--kds-gold);">Active Batch Production Tally (Across All Cooking Tickets)</span>
+        </div>
+        <span style="font-size:11px;color:var(--kds-text-secondary);">Chefs can cook these items in bulk together</span>
+      </div>
+      <div class="flex flex-wrap gap-2.5" id="batch-chips-container"></div>
+    </div>
+
+    <!-- Orders Feed -->
+    <div id="kitchen-content">
+      <div style="text-align:center;padding:5rem 0;color:var(--kds-text-secondary);">
+        <i data-lucide="refresh-cw" class="icon-xl animate-spin" style="color:var(--kds-gold);margin:0 auto 0.5rem;display:block;width:2rem;height:2rem;"></i>
+        <p style="font-size:0.75rem;">Connecting to SRM PostgreSQL live stream...</p>
+      </div>
+    </div>
+  </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/kitchen.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>{% block title %}SRM Good Foods{% endblock %}</title>
+  <meta name="description" content="Restaurant food ordering system with Firebase authentication, Razorpay payments, kitchen prep portal, delivery agent dashboard with OTP verification, and store admin management.">
+  <meta name="google-site-verification" content="DYi_wRGJCBTUI4WdQqel_P9Ieskd7SSW4A3errRwp58">
+  <link rel="icon" type="image/png" href="https://srmgoodfoods.com/wp-content/uploads/2024/06/srm-goodfoods-logo-1-1024x641.png">
+  <link rel="apple-touch-icon" href="https://srmgoodfoods.com/wp-content/uploads/2024/06/srm-goodfoods-logo-1-1024x641.png">
+  <meta property="og:title" content="SRM Good Foods">
+  <meta property="og:description" content="Restaurant food ordering system with Firebase authentication, Razorpay payments, kitchen prep portal, delivery agent dashboard with OTP verification, and store admin management.">
+  <meta property="og:image" content="https://srmgoodfoods.com/wp-content/uploads/2024/06/srm-goodfoods-logo-1-1024x641.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://srmgoodfoods.com/wp-content/uploads/2024/06/srm-goodfoods-logo-1-1024x641.png">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <!-- Razorpay Checkout SDK -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <!-- Firebase JS SDK (compat mode for simplicity) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <!-- Our CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <!-- Firebase Config (injected from server) -->
+  <script>
+    window.__FIREBASE_CONFIG__ = {{ firebase_config | safe }};
+    window.__RAZORPAY_KEY_ID__ = "{{ razorpay_key_id }}";
+    window.__APP_URL__ = "{{ app_url }}";
+    window.__LOGO_URL__ = "https://srmgoodfoods.com/wp-content/uploads/2024/06/srm-goodfoods-logo-1-1024x641.png";
+  </script>
+
+  {% block body %}{% endblock %}
+
+  <!-- Firebase Init -->
+  <script src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
+  {% block scripts %}{% endblock %}
+  <!-- Lucide Icons Initialization -->
+  <script>document.addEventListener('DOMContentLoaded', function(){ if(window.lucide) lucide.createIcons(); });</script>
+</body>
+</html>

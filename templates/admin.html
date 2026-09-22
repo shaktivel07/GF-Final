@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}SRM Admin Command Console{% endblock %}
+
+{% block body %}
+<div class="admin-page min-h-screen" style="background:#faf7f2;color:var(--stone-900);padding-bottom:5rem;">
+  <!-- Top Banner -->
+  <div class="admin-topbar" style="background:#1c1917;color:#fff;padding:1rem 1.5rem;position:sticky;top:0;z-index:30;box-shadow:var(--shadow-md);">
+    <div style="max-width:80rem;margin:0 auto;" class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="portal-logo logo logo-sm" style="background:rgba(255,255,255,0.1);padding:0.375rem;border-radius:var(--radius-xl);">
+          <img src="https://srmgoodfoods.com/wp-content/uploads/2024/06/srm-goodfoods-logo-1-1024x641.png" alt="SRM Good Foods">
+        </div>
+        <div>
+          <h1 style="font-weight:800;font-size:1.125rem;font-family:var(--font-serif);color:#fff;letter-spacing:0.025em;">SRM Admin Command Console</h1>
+          <p style="font-size:11px;color:var(--color-gold);font-weight:500;">Connected to Supabase PostgreSQL • Real-time Monitoring</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button onclick="loadAdminData()" style="padding:0.5rem;background:var(--stone-800);color:var(--stone-300);border-radius:var(--radius-xl);border:1px solid var(--stone-700);" title="Refresh">
+          <i data-lucide="refresh-cw" class="icon" id="admin-refresh-icon"></i>
+        </button>
+        <a href="/logout" class="flex items-center gap-1" style="padding:0.375rem 0.75rem;background:var(--stone-800);color:#fca5a5;border-radius:var(--radius-xl);border:1px solid var(--stone-700);font-size:0.75rem;font-weight:600;">
+          <i data-lucide="log-out" class="icon"></i>
+          <span>Exit Admin</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation Tabs -->
+  <div style="max-width:80rem;margin:0 auto;padding:1rem 1.5rem 0;">
+    <div id="admin-action-msg" class="alert alert-success" style="display:none;margin-bottom:1rem;">
+      <i data-lucide="check-circle-2" class="icon shrink-0"></i>
+      <span id="admin-action-text"></span>
+    </div>
+
+    <div class="admin-tab-bar flex items-center gap-1 overflow-x-auto pb-2 scrollbar-none" style="background:rgba(231,229,228,0.7);padding:0.25rem;border-radius:var(--radius-2xl);font-size:0.75rem;font-weight:700;">
+      <button class="nav-pill active" data-tab="ANALYTICS" onclick="setAdminTab('ANALYTICS', this)">
+        <i data-lucide="trending-up" class="icon-sm"></i>
+        <span>Analytics & Activity</span>
+      </button>
+      <button class="nav-pill" data-tab="MENU" onclick="setAdminTab('MENU', this)">
+        <i data-lucide="utensils-crossed" class="icon-sm"></i>
+        <span>Dishes & Categories</span>
+      </button>
+      <button class="nav-pill" data-tab="LOCATIONS" onclick="setAdminTab('LOCATIONS', this)">
+        <i data-lucide="map-pin" class="icon-sm"></i>
+        <span>Delivery Spots</span>
+      </button>
+      <button class="nav-pill" data-tab="SETTINGS" onclick="setAdminTab('SETTINGS', this)">
+        <i data-lucide="settings" class="icon-sm"></i>
+        <span>Shop Timings</span>
+      </button>
+      <button class="nav-pill" data-tab="USERS" onclick="setAdminTab('USERS', this)">
+        <i data-lucide="users" class="icon-sm"></i>
+        <span>Customer Logs</span>
+      </button>
+      <button class="nav-pill" data-tab="STORAGE" onclick="setAdminTab('STORAGE', this)" style="color:#b91c1c;">
+        <i data-lucide="trash-2" class="icon-sm"></i>
+        <span>Clear Orders / DB</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Content Containers -->
+  <main style="max-width:80rem;margin:0 auto;padding:1.5rem 1.5rem 4rem;">
+    <!-- 1. Analytics Tab -->
+    <div id="tab-ANALYTICS" class="admin-tab-content">
+      <div id="analytics-content">
+        <div style="text-align:center;padding:4rem 0;color:var(--stone-400);">
+          <i data-lucide="refresh-cw" class="icon-xl animate-spin" style="color:var(--color-primary);margin:0 auto 0.5rem;display:block;width:2rem;height:2rem;"></i>
+          <p style="font-size:0.75rem;">Loading live store analytics...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Menu Tab -->
+    <div id="tab-MENU" class="admin-tab-content" style="display:none;">
+      <div id="menu-content"></div>
+    </div>
+
+    <!-- 3. Locations Tab -->
+    <div id="tab-LOCATIONS" class="admin-tab-content" style="display:none;">
+      <div id="locations-content"></div>
+    </div>
+
+    <!-- 4. Settings Tab -->
+    <div id="tab-SETTINGS" class="admin-tab-content" style="display:none;">
+      <div id="settings-content"></div>
+    </div>
+
+    <!-- 5. Users Tab -->
+    <div id="tab-USERS" class="admin-tab-content" style="display:none;">
+      <div id="users-content"></div>
+    </div>
+
+    <!-- 6. Storage Tab -->
+    <div id="tab-STORAGE" class="admin-tab-content" style="display:none;">
+      <div id="storage-content"></div>
+    </div>
+  </main>
+
+  <!-- Item Modal -->
+  <div class="modal-overlay" id="item-modal" style="display:none;">
+    <div class="modal-panel" style="max-width:32rem;">
+      <div class="flex items-center justify-between" style="margin-bottom:1rem;">
+        <h3 class="modal-title" id="item-modal-title">Add Food Dish</h3>
+        <button onclick="closeItemModal()" class="modal-close"><i data-lucide="x" class="icon"></i></button>
+      </div>
+      <form onsubmit="handleSaveItem(event)">
+        <input type="hidden" id="item-id">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div style="grid-column:span 2;">
+            <label class="form-label">Dish Name</label>
+            <input type="text" id="item-name" class="form-input" required placeholder="e.g. Malabar Chicken Biryani">
+          </div>
+          <div>
+            <label class="form-label">Category</label>
+            <select id="item-category" class="form-select" required></select>
+          </div>
+          <div>
+            <label class="form-label">Price (₹)</label>
+            <input type="number" id="item-price" class="form-input" required min="1" step="1" placeholder="120">
+          </div>
+          <div style="grid-column:span 2;">
+            <label class="form-label">Image URL</label>
+            <input type="url" id="item-image" class="form-input" placeholder="https://images.unsplash.com/...">
+          </div>
+          <div style="grid-column:span 2;">
+            <label class="form-label">Description / Ingredients</label>
+            <textarea id="item-desc" class="form-input" rows="2" placeholder="Fragrant jeerakasala rice, spiced chicken..."></textarea>
+          </div>
+          <div>
+            <label class="form-label">Available From (HH:MM)</label>
+            <input type="time" id="item-start-time" class="form-input">
+          </div>
+          <div>
+            <label class="form-label">Available Until (HH:MM)</label>
+            <input type="time" id="item-end-time" class="form-input">
+          </div>
+        </div>
+        <div class="flex items-center gap-2" style="margin-top:1rem;">
+          <input type="checkbox" id="item-available" checked style="width:1.125rem;height:1.125rem;accent-color:var(--color-primary);">
+          <label for="item-available" style="font-size:0.75rem;font-weight:600;color:var(--stone-800);">Available for ordering immediately</label>
+        </div>
+        <div class="flex gap-2" style="margin-top:1.25rem;">
+          <button type="button" class="btn btn-outline flex-1" onclick="closeItemModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary flex-1">Save Dish</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Category Modal -->
+  <div class="modal-overlay" id="category-modal" style="display:none;">
+    <div class="modal-panel" style="max-width:26rem;">
+      <div class="flex items-center justify-between" style="margin-bottom:1rem;">
+        <h3 class="modal-title">Create Menu Category</h3>
+        <button onclick="closeCategoryModal()" class="modal-close"><i data-lucide="x" class="icon"></i></button>
+      </div>
+      <form onsubmit="handleSaveCategory(event)">
+        <div style="margin-bottom:0.75rem;">
+          <label class="form-label">Category Name</label>
+          <input type="text" id="category-name" class="form-input" required placeholder="e.g. Biryanis, Rolls, Beverages">
+        </div>
+        <div style="margin-bottom:0.75rem;">
+          <label class="form-label">Display Order</label>
+          <input type="number" id="category-order" class="form-input" value="1" min="1">
+        </div>
+        <div class="flex items-center gap-2" style="margin-bottom:1.25rem;">
+          <input type="checkbox" id="category-active" checked style="width:1.125rem;height:1.125rem;accent-color:var(--color-primary);">
+          <label for="category-active" style="font-size:0.75rem;font-weight:600;color:var(--stone-800);">Active Category</label>
+        </div>
+        <div class="flex gap-2">
+          <button type="button" class="btn btn-outline flex-1" onclick="closeCategoryModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary flex-1">Save Category</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Location Modal -->
+  <div class="modal-overlay" id="location-modal" style="display:none;">
+    <div class="modal-panel" style="max-width:26rem;">
+      <div class="flex items-center justify-between" style="margin-bottom:1rem;">
+        <h3 class="modal-title">Add SRM Campus Location</h3>
+        <button onclick="closeLocationModal()" class="modal-close"><i data-lucide="x" class="icon"></i></button>
+      </div>
+      <form onsubmit="handleSaveLocation(event)">
+        <div style="margin-bottom:0.75rem;">
+          <label class="form-label">Location Spot Name</label>
+          <input type="text" id="location-name" class="form-input" required placeholder="e.g. University Building (UB) Ground Floor">
+        </div>
+        <div style="margin-bottom:0.75rem;">
+          <label class="form-label">Description / Instructions</label>
+          <input type="text" id="location-desc" class="form-input" placeholder="e.g. Near main escalator">
+        </div>
+        <div class="flex items-center gap-2" style="margin-bottom:1.25rem;">
+          <input type="checkbox" id="location-active" checked style="width:1.125rem;height:1.125rem;accent-color:var(--color-primary);">
+          <label for="location-active" style="font-size:0.75rem;font-weight:600;color:var(--stone-800);">Active Drop Spot</label>
+        </div>
+        <div class="flex gap-2">
+          <button type="button" class="btn btn-outline flex-1" onclick="closeLocationModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary flex-1">Save Location</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Clear Orders Modal -->
+  <div class="modal-overlay" id="clear-orders-modal" style="display:none;">
+    <div class="modal-panel" style="max-width:26rem;">
+      <div class="flex items-center justify-between" style="margin-bottom:1rem;">
+        <h3 class="modal-title" style="color:#b91c1c;">Clear Database Orders</h3>
+        <button onclick="closeClearModal()" class="modal-close"><i data-lucide="x" class="icon"></i></button>
+      </div>
+      <p style="font-size:0.75rem;color:var(--stone-600);line-height:1.5;margin-bottom:1rem;">
+        Choose whether to purge only completed / cancelled orders or reset all live orders in the database.
+      </p>
+      <div style="margin-bottom:1.25rem;">
+        <label class="flex items-center gap-2" style="font-size:0.75rem;font-weight:600;margin-bottom:0.5rem;cursor:pointer;">
+          <input type="radio" name="clearMode" value="COMPLETED_ONLY" checked style="accent-color:var(--color-primary);">
+          <span>Purge Completed & Cancelled Orders Only</span>
+        </label>
+        <label class="flex items-center gap-2" style="font-size:0.75rem;font-weight:600;color:#b91c1c;cursor:pointer;">
+          <input type="radio" name="clearMode" value="ALL" style="accent-color:#b91c1c;">
+          <span>Purge ALL Orders (Including In-Flight Orders)</span>
+        </label>
+      </div>
+      <div class="flex gap-2">
+        <button type="button" class="btn btn-outline flex-1" onclick="closeClearModal()">Cancel</button>
+        <button type="button" class="btn flex-1" style="background:#b91c1c;color:#fff;" onclick="handleExecuteClearOrders()">Proceed with Purge</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}SRM Delivery Partner{% endblock %}
+
+{% block body %}
+<div class="delivery-page">
+  <!-- Top Header -->
+  <div class="delivery-topbar">
+    <div style="max-width:56rem;margin:0 auto;" class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="portal-logo logo logo-sm">
+          <img src="https://srmgoodfoods.com/wp-content/uploads/2024/06/srm-goodfoods-logo-1-1024x641.png" alt="SRM Good Foods">
+        </div>
+        <div>
+          <h1 style="font-weight:800;font-size:1.125rem;font-family:var(--font-serif);color:#fff;letter-spacing:0.025em;">SRM Delivery Partner</h1>
+          <p style="font-size:11px;color:var(--emerald-400);font-weight:500;">Active Campus Courier Portal</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button onclick="loadDeliveryOrders()" style="padding:0.5rem;background:var(--stone-800);color:var(--stone-300);border-radius:var(--radius-xl);" title="Refresh">
+          <i data-lucide="refresh-cw" class="icon"></i>
+        </button>
+        <a href="/logout" class="flex items-center gap-1" style="padding:0.375rem 0.75rem;background:var(--stone-800);color:#fca5a5;border-radius:var(--radius-xl);font-size:0.75rem;font-weight:600;">
+          <i data-lucide="log-out" class="icon"></i>
+          <span>Log out</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div style="max-width:56rem;margin:0 auto;padding:1.25rem 1rem;">
+    <!-- Stats -->
+    <div class="grid grid-cols-2 gap-3" style="margin-bottom:1.25rem;">
+      <div class="stat-card">
+        <div class="stat-icon amber"><i data-lucide="clock" class="icon-md"></i></div>
+        <div>
+          <span class="stat-label">Active Trips</span>
+          <span class="stat-value" id="delivery-active-count">0</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon emerald"><i data-lucide="check-circle-2" class="icon-md"></i></div>
+        <div>
+          <span class="stat-label">Delivered</span>
+          <span class="stat-value" id="delivery-done-count">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter -->
+    <div class="flex items-center gap-2" style="background:rgba(231,229,228,0.7);padding:0.25rem;border-radius:var(--radius-xl);font-size:0.75rem;font-weight:700;margin-bottom:1.25rem;" id="delivery-filters">
+      <button class="nav-pill active" style="flex:1;text-align:center;" data-filter="PENDING_DELIVERY" onclick="setDeliveryFilter('PENDING_DELIVERY', this)">
+        Dispatched & Active (<span id="delivery-active-label">0</span>)
+      </button>
+      <button class="nav-pill" style="flex:1;text-align:center;" data-filter="UNPICKED" onclick="setDeliveryFilter('UNPICKED', this)">
+        Unpicked (<span id="delivery-unpicked-label">0</span>)
+      </button>
+      <button class="nav-pill" style="flex:1;text-align:center;" data-filter="COMPLETED" onclick="setDeliveryFilter('COMPLETED', this)">
+        Delivered (<span id="delivery-done-label">0</span>)
+      </button>
+      <button class="nav-pill" style="text-align:center;padding-left:1rem;padding-right:1rem;" data-filter="ALL" onclick="setDeliveryFilter('ALL', this)">
+        All
+      </button>
+    </div>
+
+    <!-- Orders Feed -->
+    <div id="delivery-content">
+      <div style="text-align:center;padding:4rem 0;color:var(--stone-400);">
+        <i data-lucide="refresh-cw" class="icon-xl animate-spin" style="color:var(--color-primary);margin:0 auto 0.5rem;display:block;width:2rem;height:2rem;"></i>
+        <p style="font-size:0.75rem;">Loading delivery assignments...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- OTP Verification Modal -->
+  <div class="modal-overlay" id="otp-modal" style="display:none;">
+    <div class="modal-panel" style="max-width:24rem;">
+      <div style="text-align:center;margin-bottom:1rem;">
+        <div style="width:3rem;height:3rem;border-radius:var(--radius-2xl);background:var(--emerald-100);color:var(--emerald-700);display:flex;align-items:center;justify-content:center;margin:0 auto 0.5rem;">
+          <i data-lucide="key-round" class="icon-lg"></i>
+        </div>
+        <h3 style="font-size:1.125rem;font-weight:700;color:var(--stone-900);">Verify Delivery OTP</h3>
+        <p style="font-size:0.75rem;color:var(--stone-500);margin-top:0.125rem;">
+          Order <strong class="font-mono" style="color:var(--stone-900);" id="otp-order-number"></strong>
+        </p>
+      </div>
+
+      <div id="otp-error" class="alert alert-error" style="display:none;margin-bottom:0.75rem;">
+        <i data-lucide="alert-circle" class="icon shrink-0"></i>
+        <span id="otp-error-text"></span>
+      </div>
+
+      <div id="otp-success" class="alert alert-success" style="display:none;margin-bottom:0.75rem;">
+        <i data-lucide="check-circle-2" class="icon shrink-0"></i>
+        <span id="otp-success-text"></span>
+      </div>
+
+      <form onsubmit="handleVerifyOtp(event)">
+        <label style="display:block;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--stone-600);text-align:center;margin-bottom:0.5rem;">Enter 4-Digit Code</label>
+        <input type="text" id="otp-input" class="otp-input" maxlength="4" placeholder="••••" required autocomplete="off" oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)">
+        <div class="flex gap-2" style="margin-top:1rem;">
+          <button type="button" class="btn btn-outline flex-1" onclick="closeOtpModal()">Cancel</button>
+          <button type="submit" class="btn btn-success flex-1" id="otp-submit-btn">Confirm Delivery</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/delivery.js') }}"></script>
+{% endblock %}

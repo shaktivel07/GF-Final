@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}SRM Good Foods — Order Tracking{% endblock %}
+
+{% block body %}
+<!-- Header -->
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand-link" href="/">
+      <div class="logo logo-sm">
+        <img src="https://srmgoodfoods.com/wp-content/uploads/2024/06/srm-goodfoods-logo-1-1024x641.png" alt="SRM Good Foods">
+      </div>
+      <div class="hide-mobile">
+        <span class="brand-name">SRM Good Foods</span>
+        <span class="brand-tagline">Campus Food Delivery</span>
+      </div>
+    </a>
+
+    <nav class="center-nav">
+      <a href="/" class="nav-pill">
+        <i data-lucide="utensils-crossed" class="icon-sm"></i> Menu
+      </a>
+      <a href="/tracking" class="nav-pill active">
+        <i data-lucide="package-check" class="icon-sm"></i> Track Order
+      </a>
+    </nav>
+
+    <div class="flex items-center gap-2">
+      <a href="/" class="btn btn-outline btn-sm">
+        <i data-lucide="shopping-bag" class="icon-sm"></i>
+        <span>Order Food</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main style="max-width:80rem;margin:0 auto;padding:2rem 1rem 6rem;">
+  <div id="tracking-content">
+    <div style="text-align:center;padding:4rem 0;color:var(--stone-400);">
+      <i data-lucide="refresh-cw" class="icon-xl animate-spin" style="color:var(--color-primary);margin:0 auto 0.5rem;display:block;width:2rem;height:2rem;"></i>
+      <p style="font-size:0.75rem;">Loading your active orders...</p>
+    </div>
+  </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/tracking.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // Check auth or load tracking
+    setTimeout(() => {
+      loadTrackingOrders();
+    }, 500);
+  });
+</script>
+{% endblock %}
