@@ -6,6 +6,7 @@ let kitchenOrders = [];
 let activeKitchenTab = 'ACTIVE';
 let audioEnabled = true;
 let previousOrderIds = new Set();
+let previousPrintedOrderIds = new Set();
 let datePreset = 'TODAY';
 let customStartDate = '';
 let customEndDate = '';
@@ -19,6 +20,188 @@ function parseDate(dateStr) {
     }
   }
   return new Date(dateStr);
+}
+
+function getReceiptStamp() {
+  const now = new Date();
+  return now.toLocaleString([], {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function buildKitchenReceiptHtml(order) {
+  if (!order) return '';
+
+  const itemsHtml = (order.items || []).map(item => {
+    const qty = item.quantity || 1;
+    const name = item.item_name || item.name || 'Item';
+    const subtotal = Number(item.subtotal || 0);
+    return `
+      <tr>
+        <td>${qty}x ${name}</td>
+        <td>₹${subtotal}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="UTF-8" />
+        <title>SRM GoodFoods Receipt</title>
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            padding: 0;
+            background: #fff;
+            color: #111827;
+            font-family: Arial, Helvetica, sans-serif;
+          }
+          .receipt {
+            width: 100%;
+            max-width: 300px;
+            margin: 0 auto;
+            padding: 14px 12px;
+            background: #ffffff;
+          }
+          .brand {
+            text-align: center;
+            font-weight: 800;
+            font-size: 22px;
+            letter-spacing: 0.06em;
+            margin-bottom: 8px;
+          }
+          .sub {
+            text-align: center;
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            font-weight: 700;
+            color: #374151;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+          }
+          .divider {
+            border-top: 2px dashed #111827;
+            margin: 10px 0;
+          }
+          .meta {
+            font-size: 11px;
+            line-height: 1.7;
+            margin-bottom: 8px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+          }
+          td {
+            padding: 3px 0;
+            vertical-align: top;
+            border-bottom: 1px dashed #d1d5db;
+          }
+          td:last-child {
+            text-align: right;
+            white-space: nowrap;
+          }
+          .total {
+            font-size: 14px;
+            font-weight: 800;
+            margin-top: 8px;
+            display: flex;
+            justify-content: space-between;
+          }
+          .footer {
+            margin-top: 12px;
+            text-align: center;
+            font-size: 10px;
+            line-height: 1.6;
+            color: #374151;
+          }
+          @media print {
+            html, body {
+              width: 80mm;
+              margin: 0;
+              padding: 0;
+            }
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <div class="brand">SRM GOODFOODS</div>
+          <div class="sub">Kitchen Order Slip</div>
+
+          <div class="meta">
+            <div><strong>Order ID:</strong> ${order.order_number || order.id}</div>
+            <div><strong>Date:</strong> ${getReceiptStamp()}</div>
+            <div><strong>Location:</strong> ${order.location_name_snapshot || 'Campus'}</div>
+            <div><strong>Customer:</strong> ${order.customer_name || 'Guest'}</div>
+            <div><strong>Phone:</strong> ${order.customer_phone || 'N/A'}</div>
+          </div>
+
+          <div class="divider"></div>
+
+          <table>
+            <tbody>
+              ${itemsHtml || '<tr><td>No items</td><td></td></tr>'}
+            </tbody>
+          </table>
+
+          <div class="divider"></div>
+          <div class="total">
+            <span>Total</span>
+            <span>₹${Number(order.total_amount || 0)}</span>
+          </div>
+
+          <div class="footer">
+            ${order.kitchen_notes ? `Note: ${order.kitchen_notes}<br>` : ''}
+            Thank you<br>
+            SRM GoodFoods
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
+function printKitchenReceipt(order) {
+  if (!order) return;
+
+  try {
+    const printWindow = window.open('', '_blank', 'width=320,height=700');
+    if (!printWindow) {
+      return;
+    }
+
+    printWindow.document.write(buildKitchenReceiptHtml(order));
+    printWindow.document.close();
+    printWindow.focus();
+
+    setTimeout(() => {
+      try {
+        printWindow.print();
+      } catch (e) {
+        console.warn('Print failed:', e);
+      }
+      setTimeout(() => {
+        try {
+          printWindow.close();
+        } catch (e) {}
+      }, 1500);
+    }, 250);
+  } catch (e) {
+    console.warn('Unable to print receipt:', e);
+  }
 }
 
 // Sound synthesis for kitchen order ping
@@ -167,6 +350,16 @@ async function loadKitchenOrders() {
     if (hasNewOrder && previousOrderIds.size > 0) {
       playOrderAlert();
     }
+
+    const newlyConfirmedOrders = orders.filter(
+      order => order.status === 'CONFIRMED' && !previousPrintedOrderIds.has(order.id)
+    );
+    newlyConfirmedOrders.forEach(order => printKitchenReceipt(order));
+    previousPrintedOrderIds = new Set([
+      ...previousPrintedOrderIds,
+      ...orders.filter(order => order.status === 'CONFIRMED').map(order => order.id)
+    ]);
+
     previousOrderIds = new Set(orders.map(o => o.id));
 
     kitchenOrders = orders;
@@ -443,7 +636,7 @@ function renderKitchenOrders() {
         ` : ''}
 
         ${isDispatched ? `
-          <div style="text-align:center;padding:0.5rem;font-size:11px;font-weight:700;color:#38bdf8;background:rgba(14,165,233,0.15);border-radius:var(--radius-xl);border:1px solid rgba(14,165,233,0.3);display:flex;align-items:center;justify-content:center;gap:0.375rem;">
+          <div style="text-align:center;padding:0.5rem;font-size:11px;font-weight:700;color:#38bdf8;background:rgba(14,165,233,0.15);border-radius:var(--radius-xl);border:1px solid rgba(14,165,233,0.25);">
             <i data-lucide="bike" style="width:0.875rem;height:0.875rem;"></i>
             <span>Dispatched • Rider Handover in Progress</span>
           </div>
@@ -451,7 +644,7 @@ function renderKitchenOrders() {
 
         ${isUnpicked ? `
           <div style="display:flex;flex-direction:column;gap:0.5rem;">
-            <div style="text-align:center;padding:0.375rem 0.5rem;font-size:11px;font-weight:700;color:#fca5a5;background:rgba(185,28,28,0.2);border-radius:var(--radius-lg);border:1px solid rgba(185,28,28,0.4);">
+            <div style="text-align:center;padding:0.375rem 0.5rem;font-size:11px;font-weight:700;color:#fca5a5;background:rgba(185,28,28,0.2);border-radius:var(--radius-lg);border:1px solid rgba(185,28,28,0.45);">
               <span>⚠️ Customer Unreachable / No-Show</span>
             </div>
             <button class="btn btn-block" style="background:#b91c1c;color:#fff;font-weight:800;font-size:12px;padding:0.5rem;" ${disabled} onclick="if(confirm('Close and archive this unpicked ticket?')) updateKitchenStatus(${order.id}, 'CLOSED')">
@@ -462,14 +655,14 @@ function renderKitchenOrders() {
         ` : ''}
 
         ${isDelivered ? `
-          <div style="text-align:center;padding:0.5rem;font-size:11px;font-weight:700;color:#34d399;background:rgba(6,95,70,0.3);border-radius:var(--radius-xl);border:1px solid rgba(6,95,70,0.5);display:flex;align-items:center;justify-content:center;gap:0.375rem;">
+          <div style="text-align:center;padding:0.5rem;font-size:11px;font-weight:700;color:#34d399;background:rgba(6,95,70,0.3);border-radius:var(--radius-xl);border:1px solid rgba(6,95,70,0.5);">
             <i data-lucide="check-circle-2" style="width:0.875rem;height:0.875rem;"></i>
             <span>Delivered & Handed Over</span>
           </div>
         ` : ''}
 
         ${isClosed ? `
-          <div style="text-align:center;padding:0.5rem;font-size:11px;font-weight:700;color:var(--stone-400);background:rgba(41,37,36,0.5);border-radius:var(--radius-xl);border:1px solid #44403c;display:flex;align-items:center;justify-content:center;gap:0.375rem;">
+          <div style="text-align:center;padding:0.5rem;font-size:11px;font-weight:700;color:var(--stone-400);background:rgba(41,37,36,0.5);border-radius:var(--radius-xl);border:1px solid #44403c;">
             <i data-lucide="archive" style="width:0.875rem;height:0.875rem;"></i>
             <span>Ticket Closed / Resolved</span>
           </div>
