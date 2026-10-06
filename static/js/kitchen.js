@@ -204,6 +204,52 @@ function printKitchenReceipt(order) {
   }
 }
 
+async function connectThermalPrinter() {
+  if (typeof thermalPrinter === 'undefined') {
+    console.warn('Thermal printer library not loaded');
+    return false;
+  }
+
+  if (!thermalPrinter.isSupported()) {
+    console.warn('WebUSB is not supported in this browser');
+    return false;
+  }
+
+  if (thermalPrinter.isConnected) {
+    return true;
+  }
+
+  try {
+    const connected = await thermalPrinter.requestDevice();
+    return connected;
+  } catch (err) {
+    console.warn('Could not connect thermal printer:', err);
+    return false;
+  }
+}
+
+function autoPrintKitchenOrder(order) {
+  if (!order || order.status !== 'CONFIRMED') return;
+
+  if (typeof thermalPrinter !== 'undefined' && thermalPrinter.isSupported()) {
+    if (thermalPrinter.isConnected) {
+      thermalPrinter.printOrder(order);
+      return;
+    }
+
+    connectThermalPrinter().then((connected) => {
+      if (connected) {
+        thermalPrinter.printOrder(order);
+      } else {
+        printKitchenReceipt(order);
+      }
+    });
+    return;
+  }
+
+  printKitchenReceipt(order);
+}
+
 // Sound synthesis for kitchen order ping
 function playOrderAlert() {
   if (!audioEnabled) return;
@@ -354,7 +400,7 @@ async function loadKitchenOrders() {
     const newlyConfirmedOrders = orders.filter(
       order => order.status === 'CONFIRMED' && !previousPrintedOrderIds.has(order.id)
     );
-    newlyConfirmedOrders.forEach(order => printKitchenReceipt(order));
+    newlyConfirmedOrders.forEach(order => autoPrintKitchenOrder(order));
     previousPrintedOrderIds = new Set([
       ...previousPrintedOrderIds,
       ...orders.filter(order => order.status === 'CONFIRMED').map(order => order.id)
@@ -704,6 +750,9 @@ document.addEventListener('DOMContentLoaded', function() {
   const savedTheme = localStorage.getItem('kds_theme') || 'dark';
   updateThemeUI(savedTheme);
   applyDatePreset('TODAY');
+  if (typeof thermalPrinter !== 'undefined' && thermalPrinter.isSupported()) {
+    connectThermalPrinter();
+  }
   // Auto refresh live feed every 6 seconds
   setInterval(loadKitchenOrders, 6000);
 });
