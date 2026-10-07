@@ -7,6 +7,7 @@ let activeKitchenTab = 'ACTIVE';
 let audioEnabled = true;
 let previousOrderIds = new Set();
 let previousPrintedOrderIds = new Set();
+let printedOrderIds = new Set();
 let datePreset = 'TODAY';
 let customStartDate = '';
 let customEndDate = '';
@@ -190,6 +191,9 @@ function printKitchenReceipt(order) {
     setTimeout(() => {
       try {
         printWindow.print();
+        printedOrderIds.add(Number(order.id));
+        console.log(`Order #${order.order_number || order.id} marked as printed`);
+        renderKitchenOrders();
       } catch (e) {
         console.warn('Print failed:', e);
       }
@@ -234,12 +238,16 @@ function autoPrintKitchenOrder(order) {
   if (typeof thermalPrinter !== 'undefined' && thermalPrinter.isSupported()) {
     if (thermalPrinter.isConnected) {
       thermalPrinter.printOrder(order);
+      printedOrderIds.add(Number(order.id));
+      console.log(`Order #${order.order_number || order.id} printed via thermal printer`);
       return;
     }
 
     connectThermalPrinter().then((connected) => {
       if (connected) {
         thermalPrinter.printOrder(order);
+        printedOrderIds.add(Number(order.id));
+        console.log(`Order #${order.order_number || order.id} printed via thermal printer`);
       } else {
         printKitchenReceipt(order);
       }
@@ -552,10 +560,10 @@ function renderKitchenOrders() {
 
   if (orders.length === 0) {
     container.innerHTML = `
-      <div style="text-align:center;padding:5rem 0;background:#141210;border-radius:var(--radius-3xl);border:1px solid #292524;padding:3rem 1.5rem;">
-        <i data-lucide="utensils-crossed" style="width:3rem;height:3rem;color:var(--stone-600);margin:0 auto 0.75rem;display:block;"></i>
-        <h3 style="font-weight:700;font-size:1.125rem;color:var(--stone-300);">No orders found in this view</h3>
-        <p style="font-size:0.75rem;color:var(--stone-500);margin-top:0.375rem;max-width:24rem;margin-left:auto;margin-right:auto;">
+      <div style="text-align:center;padding:5rem 0;background:var(--kds-card-bg);border-radius:var(--radius-3xl);border:1px solid var(--kds-border);padding:3rem 1.5rem;">
+        <i data-lucide="utensils-crossed" style="width:3rem;height:3rem;color:var(--kds-text-secondary);margin:0 auto 0.75rem;display:block;"></i>
+        <h3 style="font-weight:700;font-size:1.125rem;color:var(--kds-text-primary);">No orders found in this view</h3>
+        <p style="font-size:0.75rem;color:var(--kds-text-secondary);margin-top:0.375rem;max-width:24rem;margin-left:auto;margin-right:auto;">
           Select another category from the sidebar or adjust your date filter to view past order logs.
         </p>
       </div>`;
@@ -573,6 +581,7 @@ function renderKitchenOrders() {
     const isUnpicked = order.status === 'UNPICKED';
     const isDelivered = order.status === 'DELIVERED';
     const isClosed = order.status === 'CLOSED' || order.status === 'CANCELLED';
+    const isPrinted = printedOrderIds.has(Number(order.id)) || order.printed === true || order.ticket_printed === true;
 
     // Calculate elapsed time in minutes
     const createdTime = parseDate(order.created_at);
@@ -601,14 +610,14 @@ function renderKitchenOrders() {
     <div class="${cardClass}">
       <div>
         <!-- Card Header -->
-        <div class="flex items-center justify-between" style="padding-bottom:0.75rem;border-bottom:1px solid #292524;margin-bottom:0.75rem;">
+        <div class="flex items-center justify-between" style="padding-bottom:0.75rem;border-bottom:1px solid var(--kds-border);margin-bottom:0.75rem;position:relative;">
           <div>
-            <span style="font-size:10px;font-weight:800;color:var(--stone-400);text-transform:uppercase;letter-spacing:0.08em;">Order Number</span>
-            <h3 style="font-size:1.125rem;font-family:var(--font-mono);font-weight:900;color:#fff;">#${order.order_number}</h3>
+            <span style="font-size:10px;font-weight:800;color:var(--kds-text-secondary);text-transform:uppercase;letter-spacing:0.08em;">Order Number</span>
+            <h3 style="font-size:1.125rem;font-family:var(--font-mono);font-weight:900;color:var(--kds-text-primary);">#${order.order_number}</h3>
           </div>
-          <div style="text-align:right;">
+          <div style="text-align:right;position:relative;">
             <span class="badge ${statusBadge}">${order.status}</span>
-            <span style="display:block;font-size:10px;color:var(--stone-400);margin-top:0.125rem;">
+            <span style="display:block;font-size:10px;color:var(--kds-text-secondary);margin-top:0.125rem;">
               ${createdTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
             </span>
             <div style="margin-top:0.25rem;">
@@ -617,20 +626,23 @@ function renderKitchenOrders() {
                 <span>${elapsedMins}m ago</span>
               </span>
             </div>
+            <div style="position:absolute;top:-8px;right:-8px;width:1.5rem;height:1.5rem;background:${isPrinted ? '#10b981' : '#ef4444'};border:2px solid var(--kds-card-bg);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.2);" title="${isPrinted ? 'Ticket Printed ✓' : 'Not Printed Yet'}">
+              ${isPrinted ? '✓' : '✕'}
+            </div>
           </div>
         </div>
 
         <!-- Campus Drop Spot & Customer -->
-        <div style="background:#141210;padding:0.75rem;border-radius:var(--radius-xl);border:1px solid #292524;margin-bottom:0.75rem;">
+        <div style="background:var(--kds-card-inner);padding:0.75rem;border-radius:var(--radius-xl);border:1px solid var(--kds-border);margin-bottom:0.75rem;">
           <div class="flex items-center justify-between" style="font-size:12px;margin-bottom:0.25rem;">
             <div class="flex items-center gap-1.5" style="color:var(--kds-gold);font-weight:700;">
               <i data-lucide="map-pin" style="width:0.875rem;height:0.875rem;flex-shrink:0;"></i>
               <span>${order.location_name_snapshot || 'Campus Location'}</span>
             </div>
-            <span style="color:var(--stone-400);font-size:11px;">₹${order.total_amount}</span>
+            <span style="color:var(--kds-text-secondary);font-size:11px;">₹${order.total_amount}</span>
           </div>
-          <div class="flex items-center justify-between" style="font-size:11px;color:var(--stone-400);">
-            <span>Customer: <strong style="color:#e7e5e4;">${order.customer_name || 'Customer'}</strong></span>
+          <div class="flex items-center justify-between" style="font-size:11px;color:var(--kds-text-secondary);">
+            <span>Customer: <strong style="color:var(--kds-text-primary);">${order.customer_name || 'Customer'}</strong></span>
             ${order.customer_phone ? `
               <a href="tel:${order.customer_phone}" class="flex items-center gap-1" style="color:#34d399;font-weight:700;">
                 <i data-lucide="phone" style="width:0.75rem;height:0.75rem;"></i>
@@ -650,15 +662,15 @@ function renderKitchenOrders() {
 
         <!-- Dishes Checklist -->
         <div style="margin-bottom:1rem;">
-          <span style="font-size:10px;font-weight:800;color:var(--stone-400);text-transform:uppercase;letter-spacing:0.08em;display:block;margin-bottom:0.375rem;">Dishes to Prepare:</span>
+          <span style="font-size:10px;font-weight:800;color:var(--kds-text-secondary);text-transform:uppercase;letter-spacing:0.08em;display:block;margin-bottom:0.375rem;">Dishes to Prepare:</span>
           <div class="space-y-1.5">
             ${(order.items || []).map(item => `
-              <div class="flex items-center justify-between" style="background:#141210;padding:0.5rem 0.75rem;border-radius:var(--radius-lg);border:1px solid #292524;font-size:12px;">
+              <div class="flex items-center justify-between" style="background:var(--kds-card-inner);padding:0.5rem 0.75rem;border-radius:var(--radius-lg);border:1px solid var(--kds-border);font-size:12px;">
                 <div class="flex items-center gap-2">
                   <span style="background:#d97706;color:#fff;font-weight:900;font-size:12px;padding:0.125rem 0.5rem;border-radius:var(--radius-md);font-family:var(--font-mono);">${item.quantity}x</span>
-                  <span style="font-weight:700;color:#f5f5f4;">${item.item_name || item.name}</span>
+                  <span style="font-weight:700;color:var(--kds-text-primary);">${item.item_name || item.name}</span>
                 </div>
-                <span style="color:var(--stone-400);font-size:11px;">₹${item.subtotal}</span>
+                <span style="color:var(--kds-text-secondary);font-size:11px;">₹${item.subtotal}</span>
               </div>
             `).join('')}
           </div>
@@ -666,7 +678,7 @@ function renderKitchenOrders() {
       </div>
 
       <!-- Action Buttons -->
-      <div style="padding-top:0.75rem;border-top:1px solid #292524;">
+      <div style="padding-top:0.75rem;border-top:1px solid var(--kds-border);">
         ${isPending ? `
           <button class="btn btn-block" style="background:#d97706;color:#fff;font-weight:800;font-size:12px;padding:0.625rem;" ${disabled} onclick="updateKitchenStatus(${order.id}, 'PREPARING')">
             <i data-lucide="flame" style="width:1rem;height:1rem;"></i>
@@ -682,7 +694,7 @@ function renderKitchenOrders() {
         ` : ''}
 
         ${isDispatched ? `
-          <div style="text-align:center;padding:0.5rem;font-size:11px;font-weight:700;color:#38bdf8;background:rgba(14,165,233,0.15);border-radius:var(--radius-xl);border:1px solid rgba(14,165,233,0.25);">
+          <div style="text-align:center;padding:0.5rem;font-size:11px;font-weight:700;color:#38bdf8;background:rgba(14,165,233,0.15);border-radius:var(--radius-xl);border:1px solid rgba(14,165,233,0.3);">
             <i data-lucide="bike" style="width:0.875rem;height:0.875rem;"></i>
             <span>Dispatched • Rider Handover in Progress</span>
           </div>
@@ -690,7 +702,7 @@ function renderKitchenOrders() {
 
         ${isUnpicked ? `
           <div style="display:flex;flex-direction:column;gap:0.5rem;">
-            <div style="text-align:center;padding:0.375rem 0.5rem;font-size:11px;font-weight:700;color:#fca5a5;background:rgba(185,28,28,0.2);border-radius:var(--radius-lg);border:1px solid rgba(185,28,28,0.45);">
+            <div style="text-align:center;padding:0.375rem 0.5rem;font-size:11px;font-weight:700;color:#fca5a5;background:rgba(185,28,28,0.2);border-radius:var(--radius-lg);border:1px solid rgba(185,28,28,0.3);">
               <span>⚠️ Customer Unreachable / No-Show</span>
             </div>
             <button class="btn btn-block" style="background:#b91c1c;color:#fff;font-weight:800;font-size:12px;padding:0.5rem;" ${disabled} onclick="if(confirm('Close and archive this unpicked ticket?')) updateKitchenStatus(${order.id}, 'CLOSED')">
@@ -708,7 +720,7 @@ function renderKitchenOrders() {
         ` : ''}
 
         ${isClosed ? `
-          <div style="text-align:center;padding:0.5rem;font-size:11px;font-weight:700;color:var(--stone-400);background:rgba(41,37,36,0.5);border-radius:var(--radius-xl);border:1px solid #44403c;">
+          <div style="text-align:center;padding:0.5rem;font-size:11px;font-weight:700;color:var(--kds-text-secondary);background:rgba(41,37,36,0.5);border-radius:var(--radius-xl);border:1px solid var(--kds-border);">
             <i data-lucide="archive" style="width:0.875rem;height:0.875rem;"></i>
             <span>Ticket Closed / Resolved</span>
           </div>
