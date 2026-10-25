@@ -6,8 +6,24 @@ let kitchenOrders = [];
 let activeKitchenTab = 'ACTIVE';
 let audioEnabled = true;
 let previousOrderIds = new Set();
-let previousPrintedOrderIds = new Set();
-let printedOrderIds = new Set();
+let firstLoadDone = false;
+
+// ---- Print state ----
+// Printed order ids are remembered in this browser so a refresh never reprints.
+const PRINTED_KEY = 'kds_printed_ids_v1';
+const AUTO_QUEUE_MAX_AGE_MS = 12 * 60 * 60 * 1000; // only auto-print orders newer than 12h
+function loadPrintedIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(PRINTED_KEY) || '[]').map(Number)); }
+  catch (e) { return new Set(); }
+}
+function savePrintedIds() {
+  try { localStorage.setItem(PRINTED_KEY, JSON.stringify([...printedOrderIds].slice(-800))); }
+  catch (e) { /* ignore */ }
+}
+let printedOrderIds = loadPrintedIds();
+// Orders waiting for the printer: id -> { order, copiesDone, reprint, copies }
+const printQueue = new Map();
+let queueRunning = false;
 let datePreset = 'TODAY';
 let customStartDate = '';
 let customEndDate = '';
@@ -175,107 +191,318 @@ function buildKitchenReceiptHtml(order) {
   `;
 }
 
+function markPrinted(orderId) {
+  printedOrderIds.add(Number(orderId));
+  savePrintedIds();
+}
+
+// Browser print dialog fallback (used by Reprint when the USB printer is not connected)
 function printKitchenReceipt(order) {
   if (!order) return;
-
   try {
     const printWindow = window.open('', '_blank', 'width=320,height=700');
     if (!printWindow) {
+      kdsToast('Popup blocked. Allow popups for this site to use browser printing.', 'error');
       return;
     }
-
     printWindow.document.write(buildKitchenReceiptHtml(order));
     printWindow.document.close();
     printWindow.focus();
-
     setTimeout(() => {
       try {
         printWindow.print();
-        printedOrderIds.add(Number(order.id));
-        console.log(`Order #${order.order_number || order.id} marked as printed`);
+        markPrinted(order.id);
         renderKitchenOrders();
       } catch (e) {
         console.warn('Print failed:', e);
       }
-      setTimeout(() => {
-        try {
-          printWindow.close();
-        } catch (e) {}
-      }, 1500);
+      setTimeout(() => { try { printWindow.close(); } catch (e) {} }, 1500);
     }, 250);
   } catch (e) {
     console.warn('Unable to print receipt:', e);
   }
 }
 
-async function connectThermalPrinter() {
-  if (typeof thermalPrinter === 'undefined') {
-    console.warn('Thermal printer library not loaded');
-    return false;
+/* ---------------------------- Toast helper ---------------------------- */
+function kdsToast(msg, type) {
+  let box = document.getElementById('kds-toasts');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'kds-toasts';
+    box.style.cssText = 'position:fixed;right:1rem;bottom:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;max-width:22rem;';
+    document.body.appendChild(box);
   }
+  const t = document.createElement('div');
+  const bg = type === 'error' ? '#b91c1c' : type === 'ok' ? '#047857' : '#1f2937';
+  t.style.cssText = `background:${bg};color:#fff;padding:.625rem .875rem;border-radius:.625rem;font-size:12px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.35);`;
+  t.textContent = msg;
+  box.appendChild(t);
+  setTimeout(() => t.remove(), 4500);
+}
 
-  if (!thermalPrinter.isSupported()) {
-    console.warn('WebUSB is not supported in this browser');
-    return false;
-  }
+/* ------------------------------ Print queue ------------------------------ */
 
-  if (thermalPrinter.isConnected) {
-    return true;
-  }
+// Add an order to the queue (no-op if it is already printed, unless forced)
+function enqueueOrder(order, opts = {}) {
+  if (!order) return;
+  const id = Number(order.id);
+  if (!opts.force && printedOrderIds.has(id)) return;
+  if (printQueue.has(id)) return;
+  printQueue.set(id, {
+    order,
+    copiesDone: 0,
+    reprint: !!opts.reprint,
+    copies: opts.copies || undefined,
+  });
+}
 
+// Print everything in the queue, oldest first. Anything that fails stays queued
+// and is retried automatically (every poll / when the printer comes back).
+async function processPrintQueue() {
+  if (queueRunning || printQueue.size === 0) { updatePrinterUI(); return; }
+  if (typeof thermalPrinter === 'undefined' || !thermalPrinter.isConnected) { updatePrinterUI(); return; }
+
+  queueRunning = true;
   try {
-    const connected = await thermalPrinter.requestDevice();
-    return connected;
-  } catch (err) {
-    console.warn('Could not connect thermal printer:', err);
-    return false;
+    for (const [id, job] of [...printQueue.entries()]) {
+      if (!thermalPrinter.isConnected) break;
+      const copies = job.copies || PRINTER_CONFIG.COPIES;
+      const done = await thermalPrinter.printOrder(job.order, {
+        copies,
+        alreadyDone: job.copiesDone,
+        reprint: job.reprint,
+      });
+      job.copiesDone = done;
+      if (done >= copies) {
+        printQueue.delete(id);
+        markPrinted(id);
+        renderKitchenOrders();
+      } else {
+        break; // printer problem: keep the rest queued and retry later
+      }
+    }
+  } finally {
+    queueRunning = false;
+    updatePrinterUI();
   }
 }
 
-function autoPrintKitchenOrder(order) {
-  if (!order || order.status !== 'CONFIRMED') return;
+/* --------------------------- Printer connection --------------------------- */
 
-  if (typeof thermalPrinter !== 'undefined' && thermalPrinter.isSupported()) {
-    if (thermalPrinter.isConnected) {
-      thermalPrinter.printOrder(order);
-      printedOrderIds.add(Number(order.id));
-      console.log(`Order #${order.order_number || order.id} printed via thermal printer`);
-      return;
-    }
+async function connectThermalPrinter(showAll) {
+  unlockAudio();
+  if (typeof thermalPrinter === 'undefined' || !thermalPrinter.isSupported()) {
+    kdsToast('USB printing needs Chrome or Edge on a computer (https or localhost).', 'error');
+    return false;
+  }
+  const ok = await thermalPrinter.requestDevice(!!showAll);
+  if (ok) {
+    kdsToast('Printer connected: ' + thermalPrinter.deviceName, 'ok');
+    processPrintQueue();
+  } else if (thermalPrinter.lastError) {
+    kdsToast(thermalPrinter.lastError, 'error');
+  }
+  updatePrinterUI();
+  return ok;
+}
 
-    connectThermalPrinter().then((connected) => {
-      if (connected) {
-        thermalPrinter.printOrder(order);
-        printedOrderIds.add(Number(order.id));
-        console.log(`Order #${order.order_number || order.id} printed via thermal printer`);
-      } else {
-        printKitchenReceipt(order);
-      }
-    });
+async function reconnectPrinter() {
+  unlockAudio();
+  let ok = await thermalPrinter.restore();
+  if (!ok) ok = await thermalPrinter.requestDevice(false);
+  if (ok) { kdsToast('Printer connected', 'ok'); processPrintQueue(); }
+  else if (thermalPrinter.lastError) kdsToast(thermalPrinter.lastError, 'error');
+  updatePrinterUI();
+}
+
+async function testPrintClick() {
+  if (!thermalPrinter.isConnected) { kdsToast('Connect the printer first.', 'error'); return; }
+  const ok = await thermalPrinter.printTest();
+  kdsToast(ok ? 'Test slip sent to printer' : ('Test print failed. ' + (thermalPrinter.lastError || '')), ok ? 'ok' : 'error');
+}
+
+function clearPrintQueue() {
+  if (printQueue.size === 0) return;
+  if (!confirm(`Remove ${printQueue.size} waiting ticket(s) from the print queue? They will be marked as printed and will not print automatically.`)) return;
+  printQueue.forEach((job, id) => printedOrderIds.add(id));
+  savePrintedIds();
+  printQueue.clear();
+  renderKitchenOrders();
+  updatePrinterUI();
+}
+
+// Reprint button on each card
+async function reprintOrder(orderId) {
+  const order = kitchenOrders.find((o) => Number(o.id) === Number(orderId));
+  if (!order) return;
+  unlockAudio();
+
+  if (printQueue.has(Number(orderId))) {
+    kdsToast(`#${order.order_number} is already waiting in the print queue.`, 'info');
+    processPrintQueue();
     return;
   }
 
+  if (typeof thermalPrinter !== 'undefined' && thermalPrinter.isConnected) {
+    enqueueOrder(order, { force: true, reprint: true, copies: 1 });
+    kdsToast(`Reprinting #${order.order_number}...`, 'info');
+    processPrintQueue();
+    return;
+  }
+  // Printer not connected: offer the browser print dialog instead
+  kdsToast('USB printer not connected. Opening browser print.', 'error');
   printKitchenReceipt(order);
 }
 
-// Sound synthesis for kitchen order ping
-function playOrderAlert() {
-  if (!audioEnabled) return;
+/* ----------------------------- Status button ----------------------------- */
+
+function getPrinterState() {
+  const waiting = printQueue.size;
+  if (typeof thermalPrinter === 'undefined' || !thermalPrinter.isSupported()) {
+    return { key: 'unsupported', color: '#9ca3af', label: 'USB printing unavailable', waiting };
+  }
+  if (!thermalPrinter.isConnected) {
+    return { key: 'off', color: '#ef4444', label: 'Printer not connected', waiting };
+  }
+  if (thermalPrinter.busy) return { key: 'busy', color: '#3b82f6', label: 'Printing...', waiting };
+  const st = thermalPrinter.lastStatus;
+  if (st && st.paperOut) return { key: 'warn', color: '#f59e0b', label: 'Printer: paper out', waiting };
+  if (st && st.coverOpen) return { key: 'warn', color: '#f59e0b', label: 'Printer: cover open', waiting };
+  if (st && st.offline) return { key: 'warn', color: '#f59e0b', label: 'Printer offline', waiting };
+  if (waiting > 0 && thermalPrinter.lastError) return { key: 'error', color: '#ef4444', label: 'Print failed, retrying', waiting };
+  return { key: 'ok', color: '#10b981', label: 'Printer connected', waiting };
+}
+
+function updatePrinterUI() {
+  const pill = document.getElementById('prn-pill');
+  if (!pill) return;
+  const st = getPrinterState();
+  const dot = document.getElementById('prn-dot');
+  const label = document.getElementById('prn-label');
+  const count = document.getElementById('prn-count');
+  if (dot) { dot.style.background = st.color; dot.classList.toggle('prn-pulse', st.key === 'ok' || st.key === 'busy'); }
+  if (label) label.textContent = st.label;
+  if (count) {
+    count.style.display = st.waiting > 0 ? 'inline-flex' : 'none';
+    count.textContent = st.waiting + ' waiting';
+  }
+
+  const detail = document.getElementById('prn-detail');
+  if (!detail) return;
+  const p = typeof thermalPrinter !== 'undefined' ? thermalPrinter : null;
+  const row = (k, v) => `<div class="prn-row"><span>${k}</span><strong>${v}</strong></div>`;
+  let html = '';
+  if (!p || !p.isSupported()) {
+    html += `<p class="prn-note">This browser cannot talk to USB printers. Open the kitchen portal in <b>Chrome</b> or <b>Edge</b> on the computer the printer is plugged into (https or localhost).</p>`;
+  } else {
+    html += row('Connection', p.isConnected ? '<span style="color:#10b981">Connected</span>' : '<span style="color:#ef4444">Not connected</span>');
+    if (p.device) html += row('Device', p.deviceName);
+    if (p.isConnected) {
+      if (p.lastStatus) {
+        const s = p.lastStatus;
+        html += row('Paper', s.paperOut ? '<span style="color:#f59e0b">Out</span>' : s.paperNear ? '<span style="color:#f59e0b">Running low</span>' : 'OK');
+        html += row('Cover', s.coverOpen ? '<span style="color:#f59e0b">Open</span>' : 'Closed');
+        html += row('Last check', new Date(s.checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      } else {
+        html += `<p class="prn-note">Connected. This printer does not report paper/cover status.</p>`;
+      }
+    }
+    if (p.lastError) html += `<p class="prn-note prn-err">${p.lastError}</p>`;
+  }
+
+  html += row('Waiting to print', printQueue.size);
+  if (printQueue.size) {
+    const nums = [...printQueue.values()].map((j) => '#' + (j.order.order_number || j.order.id)).slice(0, 12).join(', ');
+    html += `<p class="prn-note">${nums}${printQueue.size > 12 ? ' ...' : ''}</p>`;
+  }
+
+  html += '<div class="prn-actions">';
+  if (p && p.isSupported()) {
+    html += p.isConnected
+      ? `<button class="prn-btn" onclick="testPrintClick()">Print test slip</button>`
+      : `<button class="prn-btn prn-primary" onclick="connectThermalPrinter()">Connect printer</button>`;
+    if (p.isConnected) html += `<button class="prn-btn" onclick="reconnectPrinter()">Reconnect</button>`;
+    if (printQueue.size && p.isConnected) html += `<button class="prn-btn prn-primary" onclick="processPrintQueue()">Print waiting now</button>`;
+    if (printQueue.size) html += `<button class="prn-btn" onclick="clearPrintQueue()">Clear queue</button>`;
+    if (!p.isConnected) html += `<button class="prn-btn" onclick="connectThermalPrinter(true)" title="Show every USB device in the list">Printer not listed?</button>`;
+  }
+  html += '</div>';
+  detail.innerHTML = html;
+}
+
+function togglePrinterPanel(force) {
+  const panel = document.getElementById('prn-panel');
+  if (!panel) return;
+  const show = typeof force === 'boolean' ? force : panel.style.display !== 'block';
+  panel.style.display = show ? 'block' : 'none';
+  if (show) updatePrinterUI();
+}
+
+async function printerHealthTick() {
+  if (typeof thermalPrinter === 'undefined' || !thermalPrinter.isSupported()) return;
+  await thermalPrinter.checkHealth();
+  updatePrinterUI();
+  if (thermalPrinter.isConnected && printQueue.size) processPrintQueue();
+}
+
+/* ------------------------------ Order sound ------------------------------ */
+// One shared AudioContext. Browsers keep audio locked until the page gets a
+// click/tap/key press, so we unlock it on the first interaction.
+let kdsAudioCtx = null;
+function getAudioCtx() {
+  if (!kdsAudioCtx) {
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (C) kdsAudioCtx = new C();
+  }
+  return kdsAudioCtx;
+}
+
+function updateAudioLabel() {
+  const txt = document.getElementById('audio-text');
+  const icon = document.getElementById('audio-icon');
+  if (!txt) return;
+  const locked = audioEnabled && (!kdsAudioCtx || kdsAudioCtx.state !== 'running');
+  txt.textContent = audioEnabled ? (locked ? 'Alert: click page to arm' : 'Alert: ON') : 'Alert: OFF';
+  if (icon) icon.setAttribute('data-lucide', audioEnabled ? 'volume-2' : 'volume-x');
+  if (window.lucide) lucide.createIcons();
+}
+
+function unlockAudio() {
+  const c = getAudioCtx();
+  if (c && c.state === 'suspended') {
+    c.resume().then(updateAudioLabel).catch(() => {});
+  }
+  updateAudioLabel();
+}
+
+function beep(c, freq, start, dur, vol) {
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(freq, start);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(vol, start + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+  osc.connect(gain);
+  gain.connect(c.destination);
+  osc.start(start);
+  osc.stop(start + dur + 0.05);
+}
+
+// New order alert: three two-tone chimes (about 2.5 seconds)
+function playOrderAlert(force) {
+  if (!audioEnabled && !force) return;
   try {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
-    osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
-    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.4);
+    const c = getAudioCtx();
+    if (!c) return;
+    if (c.state === 'suspended') c.resume().catch(() => {});
+    const t0 = c.currentTime + 0.05;
+    [0, 0.85, 1.7].forEach((off) => {
+      beep(c, 880, t0 + off, 0.3, 0.6);
+      beep(c, 1318.5, t0 + off + 0.3, 0.45, 0.6);
+    });
   } catch (e) {
-    // Web audio might need user interaction
+    // audio still locked: it unlocks on the first click on the page
   }
 }
 
@@ -307,11 +534,9 @@ function updateThemeUI(theme) {
 
 function toggleAudioAlert() {
   audioEnabled = !audioEnabled;
-  const txt = document.getElementById('audio-text');
-  const icon = document.getElementById('audio-icon');
-  if (txt) txt.textContent = `Alert: ${audioEnabled ? 'ON' : 'OFF'}`;
-  if (icon) icon.setAttribute('data-lucide', audioEnabled ? 'volume-2' : 'volume-x');
-  if (window.lucide) lucide.createIcons();
+  unlockAudio();
+  if (audioEnabled) playOrderAlert(true); // short preview so you can hear it works
+  updateAudioLabel();
 }
 
 function toggleFullScreen() {
@@ -372,12 +597,14 @@ function applyDatePreset(preset) {
 
   document.getElementById('filter-start-date').value = customStartDate;
   document.getElementById('filter-end-date').value = customEndDate;
+  firstLoadDone = false; // a different date range is not a "new order"
   loadKitchenOrders();
 }
 
 function applyCustomDateRange() {
   customStartDate = document.getElementById('filter-start-date').value;
   customEndDate = document.getElementById('filter-end-date').value;
+  firstLoadDone = false;
   loadKitchenOrders();
 }
 
@@ -394,25 +621,29 @@ async function loadKitchenOrders() {
     const data = await res.json();
     const orders = data || [];
 
-    // Check for brand new incoming orders to trigger audio ping
-    let hasNewOrder = false;
+    // Brand new incoming orders: sound + toast (not on the very first load)
+    const brandNew = orders.filter(o => o.status === 'CONFIRMED' && !previousOrderIds.has(o.id));
+    if (firstLoadDone && brandNew.length > 0) {
+      playOrderAlert();
+      kdsToast(brandNew.length === 1
+        ? `New order #${brandNew[0].order_number}`
+        : `${brandNew.length} new orders`, 'ok');
+    }
+    firstLoadDone = true;
+
+    // Print queue: every unprinted CONFIRMED order waits here until it really prints
+    const nowMs = Date.now();
     orders.forEach(o => {
-      if (o.status === 'CONFIRMED' && !previousOrderIds.has(o.id)) {
-        hasNewOrder = true;
+      if (o.status === 'CONFIRMED' && !printedOrderIds.has(Number(o.id)) &&
+          (nowMs - parseDate(o.created_at).getTime()) < AUTO_QUEUE_MAX_AGE_MS) {
+        enqueueOrder(o);
+      }
+      // drop queued tickets whose order was cancelled/closed before printing
+      if ((o.status === 'CANCELLED' || o.status === 'CLOSED') && printQueue.has(Number(o.id))) {
+        printQueue.delete(Number(o.id));
       }
     });
-    if (hasNewOrder && previousOrderIds.size > 0) {
-      playOrderAlert();
-    }
-
-    const newlyConfirmedOrders = orders.filter(
-      order => order.status === 'CONFIRMED' && !previousPrintedOrderIds.has(order.id)
-    );
-    newlyConfirmedOrders.forEach(order => autoPrintKitchenOrder(order));
-    previousPrintedOrderIds = new Set([
-      ...previousPrintedOrderIds,
-      ...orders.filter(order => order.status === 'CONFIRMED').map(order => order.id)
-    ]);
+    processPrintQueue();
 
     previousOrderIds = new Set(orders.map(o => o.id));
 
@@ -613,7 +844,12 @@ function renderKitchenOrders() {
         <div class="flex items-center justify-between" style="padding-bottom:0.75rem;border-bottom:1px solid var(--kds-border);margin-bottom:0.75rem;position:relative;">
           <div>
             <span style="font-size:10px;font-weight:800;color:var(--kds-text-secondary);text-transform:uppercase;letter-spacing:0.08em;">Order Number</span>
-            <h3 style="font-size:1.125rem;font-family:var(--font-mono);font-weight:900;color:var(--kds-text-primary);">#${order.order_number}</h3>
+            <div class="flex items-center gap-2">
+              <h3 style="font-size:1.125rem;font-family:var(--font-mono);font-weight:900;color:var(--kds-text-primary);">#${order.order_number}</h3>
+              <button class="reprint-btn" onclick="reprintOrder(${order.id})" title="Reprint ticket">
+                <i data-lucide="printer" style="width:0.75rem;height:0.75rem;"></i>
+              </button>
+            </div>
           </div>
           <div style="text-align:right;position:relative;">
             <span class="badge ${statusBadge}">${order.status}</span>
@@ -626,7 +862,7 @@ function renderKitchenOrders() {
                 <span>${elapsedMins}m ago</span>
               </span>
             </div>
-            <div style="position:absolute;top:-8px;right:-8px;width:1.5rem;height:1.5rem;background:${isPrinted ? '#10b981' : '#ef4444'};border:2px solid var(--kds-card-bg);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.2);" title="${isPrinted ? 'Ticket Printed ✓' : 'Not Printed Yet'}">
+            <div style="position:absolute;top:-8px;right:-8px;width:1.5rem;height:1.5rem;background:${isPrinted ? '#10b981' : '#ef4444'};border:2px solid var(--kds-card-bg);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.2);" title="${isPrinted ? 'Ticket Printed ✓' : (printQueue.has(Number(order.id)) ? 'Waiting in print queue' : 'Not Printed Yet')}">
               ${isPrinted ? '✓' : '✕'}
             </div>
           </div>
@@ -758,13 +994,34 @@ async function updateKitchenStatus(orderId, newStatus) {
 }
 
 // Init
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
   const savedTheme = localStorage.getItem('kds_theme') || 'dark';
   updateThemeUI(savedTheme);
-  applyDatePreset('TODAY');
-  if (typeof thermalPrinter !== 'undefined' && thermalPrinter.isSupported()) {
-    connectThermalPrinter();
+
+  // Browsers keep sound locked until the first click/tap/key press
+  ['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
+    document.addEventListener(ev, unlockAudio, { passive: true }));
+  updateAudioLabel();
+
+  // Close the printer panel when clicking elsewhere
+  document.addEventListener('click', (e) => {
+    const wrap = document.getElementById('prn-wrap');
+    if (wrap && !wrap.contains(e.target)) togglePrinterPanel(false);
+  });
+
+  if (typeof thermalPrinter !== 'undefined') {
+    thermalPrinter.onChange = () => {
+      updatePrinterUI();
+      if (thermalPrinter.isConnected && !thermalPrinter.busy && printQueue.size) processPrintQueue();
+    };
+    // Silent reconnect to a printer that was allowed before (no click needed)
+    await thermalPrinter.restore();
   }
+  updatePrinterUI();
+
+  applyDatePreset('TODAY');
   // Auto refresh live feed every 6 seconds
   setInterval(loadKitchenOrders, 6000);
+  // Printer health check (alive / paper / cover) every 15 seconds
+  setInterval(printerHealthTick, 15000);
 });

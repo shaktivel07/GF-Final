@@ -192,6 +192,27 @@
     color: var(--kds-gold);
   }
 
+  /* Printer status button + panel */
+  .prn-wrap { position: relative; }
+  .prn-pill { display:flex; align-items:center; gap:.5rem; height:2.25rem; padding:0 .75rem; border-radius:999px; cursor:pointer;
+    background:var(--kds-hover); color:var(--kds-text-primary); border:1px solid var(--kds-border); font-size:12px; font-weight:700; }
+  .prn-dot { width:.625rem; height:.625rem; border-radius:50%; background:#9ca3af; flex-shrink:0; }
+  .prn-pulse { animation: prnPulse 2s ease-in-out infinite; }
+  @keyframes prnPulse { 0%,100% { box-shadow:0 0 0 0 rgba(16,185,129,.55); } 50% { box-shadow:0 0 0 5px rgba(16,185,129,0); } }
+  .prn-count { display:none; align-items:center; background:#b45309; color:#fff; font-size:10px; font-weight:800; padding:.0625rem .5rem; border-radius:999px; }
+  .prn-panel { display:none; position:absolute; right:0; top:2.75rem; width:19rem; z-index:60; padding:.875rem;
+    background:var(--kds-card-bg); border:1px solid var(--kds-border); border-radius:var(--radius-2xl); box-shadow:0 12px 32px rgba(0,0,0,.35); }
+  .prn-row { display:flex; justify-content:space-between; gap:.75rem; font-size:12px; padding:.25rem 0; color:var(--kds-text-secondary); }
+  .prn-row strong { color:var(--kds-text-primary); text-align:right; }
+  .prn-note { font-size:11px; color:var(--kds-text-secondary); margin:.5rem 0; line-height:1.4; }
+  .prn-err { color:#f87171; }
+  .prn-actions { display:flex; flex-wrap:wrap; gap:.375rem; margin-top:.75rem; }
+  .prn-btn { font-size:11px; font-weight:700; padding:.375rem .625rem; border-radius:.5rem; cursor:pointer;
+    background:var(--kds-hover); color:var(--kds-text-primary); border:1px solid var(--kds-border); }
+  .prn-primary { background:var(--kds-gold); color:#fff; border-color:var(--kds-gold); }
+  .reprint-btn { display:inline-flex; align-items:center; justify-content:center; width:1.5rem; height:1.5rem; border-radius:.375rem; cursor:pointer;
+    background:transparent; color:var(--kds-text-secondary); border:1px solid var(--kds-border); }
+  .reprint-btn:hover { color:var(--kds-gold); border-color:var(--kds-gold); }
   @media (max-width: 1024px) {
     .kitchen-layout { flex-direction: column; }
     .kitchen-sidebar { width: 100%; height: auto; position: static; }
@@ -335,6 +356,19 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-3">
+        <!-- Printer status -->
+        <div class="prn-wrap" id="prn-wrap">
+          <button class="prn-pill" id="prn-pill" onclick="togglePrinterPanel()" title="Printer status">
+            <span class="prn-dot" id="prn-dot"></span>
+            <i data-lucide="printer" style="width:0.875rem;height:0.875rem;"></i>
+            <span id="prn-label">Checking printer...</span>
+            <span class="prn-count" id="prn-count"></span>
+          </button>
+          <div class="prn-panel" id="prn-panel">
+            <div id="prn-detail"></div>
+          </div>
+        </div>
+
         <!-- Live Search -->
         <div style="position:relative;width:14rem;">
           <i data-lucide="search" style="position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);width:0.875rem;height:0.875rem;color:var(--kds-text-secondary);"></i>
@@ -390,5 +424,6 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/thermal-printer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/kitchen.js') }}"></script>
 {% endblock %}
