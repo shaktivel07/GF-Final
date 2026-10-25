@@ -10,7 +10,7 @@
  */
 
 const PRINTER_CONFIG = {
-  PAPER_COLS: 42,          // characters per line. 80mm paper: 42-48, 58mm paper: 32
+  PAPER_COLS: 56,          // characters per line with the small font (Font B). 80mm paper: 56-64, 58mm paper: 42
   COPIES: 2,               // copies per new order
   BRAND: 'SRM GOODFOODS',
   STORAGE_KEY: 'kds_printer_id',
@@ -252,7 +252,16 @@ class ThermalPrinterManager {
    * Print `copies` copies (starting after `alreadyDone`).
    * Returns the total number of copies that are now printed.
    */
-  async printOrder(order, opts = {}) {
+  _exclusive(fn) {
+    this._chain = (this._chain || Promise.resolve()).then(fn, fn);
+    return this._chain;
+  }
+
+  printOrder(order, opts = {}) {
+    return this._exclusive(() => this._printOrderNow(order, opts));
+  }
+
+  async _printOrderNow(order, opts = {}) {
     const copies = opts.copies || PRINTER_CONFIG.COPIES;
     let done = opts.alreadyDone || 0;
     if (!this.isConnected || !this.device) return done;
@@ -340,9 +349,9 @@ class ThermalPrinterManager {
 
     r += ESC + '@';                       // reset
     r += ESC + 'a\x01';                   // center
-    r += GS + '!\x11' + ESC + 'E\x01';    // double size + bold
+    r += ESC + 'M\x00' + ESC + 'E\x01';   // normal size, bold (no more double size)
     r += PRINTER_CONFIG.BRAND + '\n';
-    r += GS + '!\x00' + ESC + 'E\x00';
+    r += ESC + 'E\x00' + ESC + 'M\x01';   // small font (Font B) for everything else
     r += 'Kitchen Order Slip\n';
     if (reprint) r += ESC + 'E\x01' + '*** REPRINT ***\n' + ESC + 'E\x00';
     r += '\n';
@@ -365,11 +374,9 @@ class ThermalPrinterManager {
     });
 
     r += dash;
-    r += ESC + 'a\x02';                   // right align total
-    r += GS + '!\x11' + ESC + 'E\x01';
-    r += 'TOTAL: Rs.' + Number(order.total_amount || 0).toFixed(2) + '\n';
-    r += GS + '!\x00' + ESC + 'E\x00';
-    r += ESC + 'a\x00';
+    r += ESC + 'E\x01';
+    r += this._line('TOTAL', 'Rs.' + Number(order.total_amount || 0).toFixed(2));
+    r += ESC + 'E\x00';
 
     if (order.kitchen_notes) {
       r += '\n' + dash + 'SPECIAL NOTES:\n';
@@ -387,6 +394,117 @@ class ThermalPrinterManager {
     const bytes = new Uint8Array(r.length);
     for (let i = 0; i < r.length; i++) bytes[i] = r.charCodeAt(i) & 0xff;
     return bytes;
+  }
+
+  /* ---------------------------- customer bill ----------------------------- */
+
+  _orderDate(order) {
+    let d = order && order.created_at;
+    if (typeof d === 'string' && !d.endsWith('Z') && !d.includes('+')) d = d.replace(' ', 'T') + 'Z';
+    const dt = d ? new Date(d) : new Date();
+    return isNaN(dt.getTime()) ? new Date() : dt;
+  }
+
+  _fmtDate(dt) {
+    const p = (n) => String(n).padStart(2, '0');
+    return `${p(dt.getDate())}/${p(dt.getMonth() + 1)}/${dt.getFullYear()} ${p(dt.getHours())}:${p(dt.getMinutes())}`;
+  }
+
+  // one bill row: name (wrapped) | qty | rate | amount
+  _billRow(name, qty, rate, amt) {
+    const cols = PRINTER_CONFIG.PAPER_COLS;
+    const wQty = 4, wRate = 9, wAmt = 10;
+    const wName = cols - wQty - wRate - wAmt;
+    const lines = this._wrap(name, wName);
+    const pad = (t, w) => ' '.repeat(Math.max(w - t.length, 0)) + t;
+    let out = (lines[0] || '').padEnd(wName) + pad(String(qty), wQty) + pad(rate, wRate) + pad(amt, wAmt) + '\n';
+    for (let i = 1; i < lines.length; i++) out += lines[i] + '\n';
+    return out;
+  }
+
+  buildBill(order, { reprint = false } = {}) {
+    const cols = PRINTER_CONFIG.PAPER_COLS;
+    const dash = '-'.repeat(cols) + '\n';
+    const ESC = '\x1B', GS = '\x1D';
+    const money = (n) => Number(n || 0).toFixed(2);
+    let r = '';
+
+    r += ESC + '@';
+    r += ESC + 'a\x01';
+    r += ESC + 'M\x00' + ESC + 'E\x01';
+    r += PRINTER_CONFIG.BRAND + '\n';
+    r += ESC + 'E\x00' + ESC + 'M\x01';
+    r += 'CUSTOMER BILL\n';
+    if (reprint) r += ESC + 'E\x01' + '(DUPLICATE COPY)\n' + ESC + 'E\x00';
+    r += '\n' + ESC + 'a\x00';
+
+    r += dash;
+    r += this._line('BILL NO', '#' + (order.order_number || order.id));
+    r += this._line('ORDER DATE', this._fmtDate(this._orderDate(order)));
+    r += this._line('CUSTOMER', order.customer_name || 'Guest');
+    if (order.customer_phone) r += this._line('PHONE', order.customer_phone);
+    r += this._line('DELIVER TO', order.location_name_snapshot || 'Campus');
+    r += dash;
+
+    r += ESC + 'E\x01' + this._billRow('ITEM', 'QTY', 'RATE', 'AMOUNT') + ESC + 'E\x00';
+    r += dash;
+
+    let sum = 0;
+    (order.items || []).forEach((item) => {
+      const qty = item.quantity || 1;
+      const sub = Number(item.subtotal != null ? item.subtotal : (item.price || 0) * qty);
+      const rate = Number(item.price != null ? item.price : sub / qty);
+      sum += sub;
+      r += this._billRow(item.item_name || item.name || 'Item', qty, money(rate), money(sub));
+    });
+
+    r += dash;
+    const total = Number(order.total_amount || 0);
+    const extra = total - sum;
+    if (Math.abs(extra) > 0.005) {
+      r += this._line('Item total', 'Rs.' + money(sum));
+      r += this._line(extra > 0 ? 'Other charges' : 'Discount', 'Rs.' + money(Math.abs(extra)));
+    }
+    r += ESC + 'M\x00' + ESC + 'E\x01';
+    r += this._line('TOTAL', 'Rs.' + money(total));   // bold, normal size
+    r += ESC + 'E\x00' + ESC + 'M\x01';
+    r += dash;
+
+    const pay = String(order.payment_status || '').toUpperCase();
+    if (pay) r += this._line('PAYMENT', pay);
+    if (order.razorpay_payment_id) r += this._line('REF', String(order.razorpay_payment_id).slice(-10));
+    r += this._line('PRINTED', this._fmtDate(new Date()));
+
+    r += '\n' + ESC + 'a\x01';
+    r += 'Thank you! Visit again\n';
+    r += '\n\n\n\n';
+    r += GS + 'V\x42\x00';
+
+    const bytes = new Uint8Array(r.length);
+    for (let i = 0; i < r.length; i++) bytes[i] = r.charCodeAt(i) & 0xff;
+    return bytes;
+  }
+
+  /** Print the customer bill. Returns true only if it was really sent. */
+  printBill(order, opts = {}) {
+    return this._exclusive(async () => {
+      if (!this.isConnected || !this.device) return false;
+      this.busy = true;
+      this._notify();
+      try {
+        await this._write(this.buildBill(order, opts));
+        this.lastError = '';
+        return true;
+      } catch (err) {
+        console.error('Bill print failed:', err);
+        this.lastError = String((err && err.message) || err);
+        if (!this.device || !this.device.opened) this.isConnected = false;
+        return false;
+      } finally {
+        this.busy = false;
+        this._notify();
+      }
+    });
   }
 }
 
