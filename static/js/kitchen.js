@@ -50,6 +50,27 @@ function getReceiptStamp() {
   });
 }
 
+// Shared styles for the browser-print templates (small fonts for 80mm paper)
+const RECEIPT_CSS = `
+  * { box-sizing: border-box; }
+  @page { size: 80mm auto; margin: 0; }
+  body { margin: 0; padding: 0; background: #fff; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+  .receipt { width: 100%; max-width: 300px; margin: 0 auto; padding: 8px 8px; background: #fff; }
+  .brand { text-align: center; font-weight: 800; font-size: 13px; letter-spacing: 0.05em; margin-bottom: 3px; }
+  .sub { text-align: center; font-size: 8px; letter-spacing: 0.08em; font-weight: 700; color: #374151; margin-bottom: 7px; text-transform: uppercase; }
+  .divider { border-top: 1px dashed #111827; margin: 6px 0; }
+  .meta { font-size: 9px; line-height: 1.5; margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 9px; }
+  th { text-align: left; font-size: 8px; padding: 2px 0; border-bottom: 1px solid #111827; }
+  th.r, td.r { text-align: right; white-space: nowrap; }
+  td { padding: 2px 0; vertical-align: top; border-bottom: 1px dashed #d1d5db; }
+  td:last-child { text-align: right; white-space: nowrap; }
+  .total { font-size: 11px; font-weight: 800; margin-top: 5px; display: flex; justify-content: space-between; }
+  .line { font-size: 9px; display: flex; justify-content: space-between; margin-top: 2px; }
+  .footer { margin-top: 8px; text-align: center; font-size: 8px; line-height: 1.5; color: #374151; }
+  @media print { html, body { width: 80mm; margin: 0; padding: 0; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+`;
+
 function buildKitchenReceiptHtml(order) {
   if (!order) return '';
 
@@ -57,107 +78,16 @@ function buildKitchenReceiptHtml(order) {
     const qty = item.quantity || 1;
     const name = item.item_name || item.name || 'Item';
     const subtotal = Number(item.subtotal || 0);
-    return `
-      <tr>
-        <td>${qty}x ${name}</td>
-        <td>₹${subtotal}</td>
-      </tr>
-    `;
+    return `<tr><td>${qty}x ${name}</td><td>₹${subtotal}</td></tr>`;
   }).join('');
 
-  return `
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="UTF-8" />
-        <title>SRM GoodFoods Receipt</title>
-        <style>
-          * { box-sizing: border-box; }
-          body {
-            margin: 0;
-            padding: 0;
-            background: #fff;
-            color: #111827;
-            font-family: Arial, Helvetica, sans-serif;
-          }
-          .receipt {
-            width: 100%;
-            max-width: 300px;
-            margin: 0 auto;
-            padding: 14px 12px;
-            background: #ffffff;
-          }
-          .brand {
-            text-align: center;
-            font-weight: 800;
-            font-size: 22px;
-            letter-spacing: 0.06em;
-            margin-bottom: 8px;
-          }
-          .sub {
-            text-align: center;
-            font-size: 11px;
-            letter-spacing: 0.08em;
-            font-weight: 700;
-            color: #374151;
-            margin-bottom: 12px;
-            text-transform: uppercase;
-          }
-          .divider {
-            border-top: 2px dashed #111827;
-            margin: 10px 0;
-          }
-          .meta {
-            font-size: 11px;
-            line-height: 1.7;
-            margin-bottom: 8px;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 11px;
-          }
-          td {
-            padding: 3px 0;
-            vertical-align: top;
-            border-bottom: 1px dashed #d1d5db;
-          }
-          td:last-child {
-            text-align: right;
-            white-space: nowrap;
-          }
-          .total {
-            font-size: 14px;
-            font-weight: 800;
-            margin-top: 8px;
-            display: flex;
-            justify-content: space-between;
-          }
-          .footer {
-            margin-top: 12px;
-            text-align: center;
-            font-size: 10px;
-            line-height: 1.6;
-            color: #374151;
-          }
-          @media print {
-            html, body {
-              width: 80mm;
-              margin: 0;
-              padding: 0;
-            }
-            body {
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-          }
-        </style>
-      </head>
+  return `<!doctype html>
+    <html><head><meta charset="UTF-8" /><title>SRM GoodFoods Receipt</title>
+      <style>${RECEIPT_CSS}</style></head>
       <body>
         <div class="receipt">
           <div class="brand">SRM GOODFOODS</div>
           <div class="sub">Kitchen Order Slip</div>
-
           <div class="meta">
             <div><strong>Order ID:</strong> ${order.order_number || order.id}</div>
             <div><strong>Date:</strong> ${getReceiptStamp()}</div>
@@ -165,35 +95,124 @@ function buildKitchenReceiptHtml(order) {
             <div><strong>Customer:</strong> ${order.customer_name || 'Guest'}</div>
             <div><strong>Phone:</strong> ${order.customer_phone || 'N/A'}</div>
           </div>
-
           <div class="divider"></div>
-
-          <table>
-            <tbody>
-              ${itemsHtml || '<tr><td>No items</td><td></td></tr>'}
-            </tbody>
-          </table>
-
+          <table><tbody>${itemsHtml || '<tr><td>No items</td><td></td></tr>'}</tbody></table>
           <div class="divider"></div>
-          <div class="total">
-            <span>Total</span>
-            <span>₹${Number(order.total_amount || 0)}</span>
-          </div>
-
+          <div class="total"><span>Total</span><span>₹${Number(order.total_amount || 0)}</span></div>
           <div class="footer">
             ${order.kitchen_notes ? `Note: ${order.kitchen_notes}<br>` : ''}
-            Thank you<br>
-            SRM GoodFoods
+            Thank you<br>SRM GoodFoods
           </div>
         </div>
-      </body>
-    </html>
-  `;
+      </body></html>`;
+}
+
+// Customer bill (browser-print version)
+function buildBillHtml(order) {
+  if (!order) return '';
+  let sum = 0;
+  const rows = (order.items || []).map(item => {
+    const qty = item.quantity || 1;
+    const sub = Number(item.subtotal != null ? item.subtotal : (item.price || 0) * qty);
+    const rate = Number(item.price != null ? item.price : sub / qty);
+    sum += sub;
+    return `<tr><td>${item.item_name || item.name || 'Item'}</td><td class="r">${qty}</td><td class="r">${rate.toFixed(2)}</td><td class="r">${sub.toFixed(2)}</td></tr>`;
+  }).join('');
+  const total = Number(order.total_amount || 0);
+  const extra = total - sum;
+  const extraHtml = Math.abs(extra) > 0.005
+    ? `<div class="line"><span>Item total</span><span>₹${sum.toFixed(2)}</span></div>
+       <div class="line"><span>${extra > 0 ? 'Other charges' : 'Discount'}</span><span>₹${Math.abs(extra).toFixed(2)}</span></div>` : '';
+  const pay = String(order.payment_status || '').toUpperCase();
+
+  return `<!doctype html>
+    <html><head><meta charset="UTF-8" /><title>SRM GoodFoods Bill</title>
+      <style>${RECEIPT_CSS}</style></head>
+      <body>
+        <div class="receipt">
+          <div class="brand">SRM GOODFOODS</div>
+          <div class="sub">Customer Bill</div>
+          <div class="meta">
+            <div><strong>Bill No:</strong> #${order.order_number || order.id}</div>
+            <div><strong>Order date:</strong> ${parseDate(order.created_at).toLocaleString([], {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+            <div><strong>Customer:</strong> ${order.customer_name || 'Guest'}</div>
+            ${order.customer_phone ? `<div><strong>Phone:</strong> ${order.customer_phone}</div>` : ''}
+            <div><strong>Deliver to:</strong> ${order.location_name_snapshot || 'Campus'}</div>
+          </div>
+          <div class="divider"></div>
+          <table>
+            <thead><tr><th>Item</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="4">No items</td></tr>'}</tbody>
+          </table>
+          <div class="divider"></div>
+          ${extraHtml}
+          <div class="total"><span>Total</span><span>₹${total.toFixed(2)}</span></div>
+          <div class="divider"></div>
+          ${pay ? `<div class="line"><span>Payment</span><span>${pay}</span></div>` : ''}
+          <div class="line"><span>Printed</span><span>${getReceiptStamp()}</span></div>
+          <div class="footer">Thank you! Visit again<br>SRM GoodFoods</div>
+        </div>
+      </body></html>`;
 }
 
 function markPrinted(orderId) {
   printedOrderIds.add(Number(orderId));
   savePrintedIds();
+}
+
+/* ------------------------- Customer bill printing ------------------------- */
+// Bills are printed by hand (button on each order card). We remember which orders
+// have had a bill printed, and when, in this browser.
+const BILL_KEY = 'kds_bill_printed_v1';
+function loadBillPrinted() {
+  try { return JSON.parse(localStorage.getItem(BILL_KEY) || '{}') || {}; }
+  catch (e) { return {}; }
+}
+let billPrinted = loadBillPrinted();   // { orderId: ISO time }
+function markBillPrinted(orderId) {
+  billPrinted[Number(orderId)] = new Date().toISOString();
+  const ids = Object.keys(billPrinted);
+  if (ids.length > 800) {   // keep the newest 800 only
+    ids.sort((a, b) => billPrinted[a].localeCompare(billPrinted[b]))
+       .slice(0, ids.length - 800).forEach(k => delete billPrinted[k]);
+  }
+  try { localStorage.setItem(BILL_KEY, JSON.stringify(billPrinted)); } catch (e) { /* ignore */ }
+}
+
+function browserPrintHtml(html, onPrinted) {
+  const w = window.open('', '_blank', 'width=320,height=700');
+  if (!w) { kdsToast('Popup blocked. Allow popups for this site to use browser printing.', 'error'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => {
+    try { w.print(); if (onPrinted) onPrinted(); } catch (e) { console.warn('Print failed:', e); }
+    setTimeout(() => { try { w.close(); } catch (e) {} }, 1500);
+  }, 250);
+}
+
+async function printBillForOrder(orderId) {
+  const order = kitchenOrders.find((o) => Number(o.id) === Number(orderId));
+  if (!order) return;
+  unlockAudio();
+  const again = !!billPrinted[Number(orderId)];
+
+  if (typeof thermalPrinter !== 'undefined' && thermalPrinter.isConnected) {
+    kdsToast(`Printing bill for #${order.order_number}...`, 'info');
+    const ok = await thermalPrinter.printBill(order, { reprint: again });
+    if (ok) {
+      markBillPrinted(orderId);
+      kdsToast(`Bill printed for #${order.order_number}`, 'ok');
+      renderKitchenOrders();
+    } else {
+      kdsToast(`Bill NOT printed for #${order.order_number}. ${thermalPrinter.lastError || 'Check the printer.'}`, 'error');
+    }
+    updatePrinterUI();
+    return;
+  }
+  // USB printer not connected: use the browser print dialog
+  kdsToast('USB printer not connected. Opening browser print.', 'error');
+  browserPrintHtml(buildBillHtml(order), () => { markBillPrinted(orderId); renderKitchenOrders(); });
 }
 
 // Browser print dialog fallback (used by Reprint when the USB printer is not connected)
@@ -915,6 +934,19 @@ function renderKitchenOrders() {
 
       <!-- Action Buttons -->
       <div style="padding-top:0.75rem;border-top:1px solid var(--kds-border);">
+        ${order.status !== 'CANCELLED' ? `
+          <div class="bill-row">
+            <span class="bill-chip ${billPrinted[Number(order.id)] ? 'done' : 'pending'}" title="${billPrinted[Number(order.id)] ? 'Customer bill has been printed' : 'Customer bill not printed yet'}">
+              ${billPrinted[Number(order.id)]
+                ? '✓ Bill printed ' + new Date(billPrinted[Number(order.id)]).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})
+                : '✕ Bill not printed'}
+            </span>
+            <button class="bill-btn" onclick="printBillForOrder(${order.id})" title="Print customer bill">
+              <i data-lucide="receipt" style="width:0.75rem;height:0.75rem;"></i>
+              <span>${billPrinted[Number(order.id)] ? 'Reprint Bill' : 'Print Bill'}</span>
+            </button>
+          </div>
+        ` : ''}
         ${isPending ? `
           <button class="btn btn-block" style="background:#d97706;color:#fff;font-weight:800;font-size:12px;padding:0.625rem;" ${disabled} onclick="updateKitchenStatus(${order.id}, 'PREPARING')">
             <i data-lucide="flame" style="width:1rem;height:1rem;"></i>
