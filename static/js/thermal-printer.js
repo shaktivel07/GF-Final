@@ -355,9 +355,6 @@ class ThermalPrinterManager {
     r += this._line('CUSTOMER', order.customer_name || 'Guest');
     r += this._line('PHONE', order.customer_phone || 'N/A');
     r += dash;
-    r += 'DISHES TO PREPARE:\n';
-    r += dash;
-
     (order.items || []).forEach((item) => {
       const qty = item.quantity || 1;
       const name = item.item_name || item.name || 'Item';
