@@ -213,6 +213,14 @@
   .reprint-btn { display:inline-flex; align-items:center; justify-content:center; width:1.5rem; height:1.5rem; border-radius:.375rem; cursor:pointer;
     background:transparent; color:var(--kds-text-secondary); border:1px solid var(--kds-border); }
   .reprint-btn:hover { color:var(--kds-gold); border-color:var(--kds-gold); }
+  /* Customer bill row on each order card */
+  .bill-row { display:flex; align-items:center; justify-content:space-between; gap:.5rem; margin-bottom:.625rem; }
+  .bill-chip { font-size:10px; font-weight:800; padding:.1875rem .5rem; border-radius:999px; white-space:nowrap; }
+  .bill-chip.pending { background:rgba(239,68,68,.15); color:#f87171; border:1px solid rgba(239,68,68,.4); }
+  .bill-chip.done { background:rgba(16,185,129,.15); color:#34d399; border:1px solid rgba(16,185,129,.4); }
+  .bill-btn { display:inline-flex; align-items:center; gap:.3rem; font-size:11px; font-weight:700; padding:.3125rem .625rem; border-radius:.5rem; cursor:pointer;
+    background:var(--kds-hover); color:var(--kds-text-primary); border:1px solid var(--kds-border); }
+  .bill-btn:hover { border-color:var(--kds-gold); color:var(--kds-gold); }
   @media (max-width: 1024px) {
     .kitchen-layout { flex-direction: column; }
     .kitchen-sidebar { width: 100%; height: auto; position: static; }
